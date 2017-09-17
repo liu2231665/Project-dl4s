@@ -3,10 +3,11 @@
 # Institute: Stony Brook University
 
 import tensorflow as tf
-from collections import OrderedDict
+from .utility import inference_net
 
 class binRNN():
-    def __int__(
+
+    def __init__(
             self,
             unitType,
             dimLayer = []
@@ -15,4 +16,8 @@ class binRNN():
             raise(ValueError('The structure is empty!'))
 
         self.x = tf.placeholder(dtype='float32', shape=[None, None, dimLayer[0]])
-        self.params = OrderedDict()
+        self.numLayer = len(dimLayer) - 2
+        self.unitType = unitType
+
+        # Build the Inference Network
+        hidden = inference_net(unitType, dimLayer, self.x)
