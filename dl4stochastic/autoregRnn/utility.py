@@ -14,6 +14,9 @@ class config(object):
     max_steps = 100
     batch_size = 20
     float = 'float32'
+    Opt = 'SGD'
+    savePath = None
+    eventPath = None
 
 # Build the hidden layers of the RNN
 def hidden_net(
@@ -22,7 +25,7 @@ def hidden_net(
 ):
     numLayer = len(Config.dimLayer) - 2
 
-    initializer = tf.random_uniform_initializer(-config.init_scale, config.init_scale)
+    initializer = tf.random_uniform_initializer(-Config.init_scale, Config.init_scale)
     layers = []
     for i in range(numLayer):
         tf.variable_scope('hidden_' + str(i + 1), initializer=initializer)
@@ -34,7 +37,7 @@ def hidden_net(
             layers.append(tf.nn.rnn_cell.BasicRNNCell(num_units=Config.dimLayer[i + 1]))
     cells = tf.contrib.rnn.MultiRNNCell(layers, state_is_tuple=True)
 
-    state = cells.zero_state(config.batch_size, config.float)
+    state = cells.zero_state(Config.batch_size, Config.float)
     outputs, _ = tf.nn.dynamic_rnn(cells, x, initial_state=state)
 
     return cells, tf.reshape(outputs, (-1, Config.dimLayer[-2])), initializer
