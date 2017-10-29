@@ -6,26 +6,46 @@ import tensorflow as tf
 from .utility import hidden_net, config
 import numpy as np
 
-# General Auto-regressive RNN
+"""
+Class: arRNN - the hyper abstraction of the auto-regressive RNN.
+"""
 class arRNN(object):
+
+    """
+    __init__:the initialization function.
+    input: Config - configuration class in ./utility.
+    output: None.
+    """
     def __init__(
             self,
             Config,
     ):
+        # Check the dimension configuration.
         if Config.dimLayer == []:
             raise(ValueError('The structure is empty!'))
+        # Check the autoregressive structure(i.e. dim of output is equal to dim of input).
         if Config.dimLayer[-1] != Config.dimLayer[0]:
             Config.dimLayer[-1] = Config.dimLayer[0]
 
+        # <tensor placeholder> input.
         self.x = tf.placeholder(dtype='float32', shape=[Config.batch_size, Config.max_steps, Config.dimLayer[0]])
+        # <tensor placeholder> learning rate.
         self.lr = tf.placeholder(dtype='float32', shape=(), name='learningRate')
+        # <scalar> number of hidden layers.
         self._numLayer = len(Config.dimLayer) - 2
+        # <scalar list> dimensions of each layer[input, hiddens, output].
         self._dimLayer = Config.dimLayer
+        # <string/None> path to save the model.
         self._savePath = Config.savePath
+        # <string/None> path to save the events.
         self._eventPath = Config.eventPath
 
         # Build the Inference Network
+        # self._cell: the mutil - layer hidden cells.
+        # self._hiddenOutput - the output with shape [batch_size, max_time, cell.output_size].
+        # self._initializer - Initializer.
         self._cell, self._hiddenOutput, self._initializer = hidden_net(self.x, Config)
+        # <Tensorflow Optimizer>.
         if Config.Opt == 'Adadelta':
             self._optimizer = tf.train.AdadeltaOptimizer(learning_rate=self.lr)
         elif Config.Opt == 'Adam':
@@ -37,9 +57,11 @@ class arRNN(object):
         else:
             self._optimizer = None
             raise(ValueError("Config.Opt should be either 'Adadelta', 'Adam', 'Momentum' or 'SGD'!"))
-
+        # <Tensorflow Session>.
         self._sess = tf.Session()
+        # <Tensorflow Saver> Basic Saver.
         self._saver = tf.train.Saver()
+        return
 
     def _runSession(self):
         self._sess.run(tf.global_variables_initializer())
@@ -67,7 +89,11 @@ class arRNN(object):
         pass
 
 class binRNN(arRNN):
-
+    """
+        __init__:the initialization function.
+        input: Config - configuration class in ./utility.
+        output: None.
+    """
     def __init__(
             self,
             Config,
@@ -78,8 +104,8 @@ class binRNN(arRNN):
             # define the output layer.
             W = tf.get_variable('weight', shape=(Config.dimLayer[-2], Config.dimLayer[-1]))
             b = tf.get_variable('bias', shape=Config.dimLayer[-1], initializer=tf.zeros_initializer)
-            logits = tf.nn.xw_plus_b(self._hiddenOutput, W, b)
-            logits = tf.reshape(logits, [Config.batch_size, Config.max_steps, Config.dimLayer[-1]])
+            logits = tf.tensordot(self._hiddenOutput, W, [[-1], [0]]) + b
+            #logits = tf.reshape(logits, [Config.batch_size, Config.max_steps, Config.dimLayer[-1]])
             self._outputs = tf.nn.sigmoid(logits)
             # define the loss function.
             self._loss = tf.losses.sigmoid_cross_entropy(self.x[:, 1:, :], logits[:, 0:-1, :])
