@@ -31,13 +31,11 @@ class _arRNN(object):
         # <tensor graph> define a default graph.
         self._graph = tf.Graph()
         # <scalar>
-        self._max_steps = Config.max_steps
-        # <scalar>
         self._batch_size = Config.batch_size
 
         with self._graph.as_default():
             # <tensor placeholder> input.
-            self.x = tf.placeholder(dtype='float32', shape=[Config.batch_size, Config.max_steps, Config.dimLayer[0]])
+            self.x = tf.placeholder(dtype='float32', shape=[None, None, Config.dimLayer[0]])
             # <tensor placeholder> learning rate.
             self.lr = tf.placeholder(dtype='float32', shape=(), name='learningRate')
 
@@ -53,12 +51,20 @@ class _arRNN(object):
             self._loadPath = Config.loadPath
             # <list> collection of trainable parameters.
             self._params = []
+            # <pass> will be define in the children classes.
+            self._train_step = None
+            # <pass> will be define in the children classes.
+            self._loss = None
+            # <pass> will be define in the children classes.
+            self._outputs = None
 
             # Build the Inference Network
             # self._cell: the mutil - layer hidden cells.
             # self._hiddenOutput - the output with shape [batch_size, max_time, cell.output_size].
             # self._initializer - Initializer.
-            self._cell, self._hiddenOutput, self._initializer = hidden_net(self.x, self._graph, Config)
+            self._cell, self._hiddenOutput, self._initializer = hidden_net(
+                self.x, self._graph, Config)
+
             # <Tensorflow Optimizer>.
             if Config.Opt == 'Adadelta':
                 self._optimizer = tf.train.AdadeltaOptimizer(learning_rate=self.lr)
@@ -74,6 +80,11 @@ class _arRNN(object):
             self._sess = tf.Session(graph=self._graph)
         return
 
+    """
+    _runSession: initialize the graph or restore from the load path.
+    input: None.
+    output: None.
+    """
     def _runSession(self):
         if self._loadPath is None:
             self._sess.run(tf.global_variables_initializer())
@@ -86,18 +97,39 @@ class _arRNN(object):
     train_function: compute the loss and update the tensor variables.
     input: input - numerical input.
            lrate - <scalar> learning rate.
-    output: should be the loss value.
+    output: the loss value.
     """
     def train_function(self, input, lrate):
-        return
+        with self._graph.as_default():
+            zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
+            con_input = np.concatenate((zero_padd, input), axis=1)
+            _, loss_value = self._sess.run([self._train_step, self._loss],
+                                           feed_dict={self.x: con_input, self.lr: lrate})
+        return loss_value * input.shape[-1]
 
     """
     val_function: compute the loss with given input.
     input: input - numerical input.
-    output: should be the loss value.
+    output: the loss value.
     """
     def val_function(self, input):
-        return
+        with self._graph.as_default():
+            zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
+            con_input = np.concatenate((zero_padd, input), axis=1)
+            loss_value = self._sess.run(self._loss, feed_dict={self.x: con_input})
+        return loss_value * input.shape[-1]
+
+    """
+    output_function: compute the output with given input.
+    input: input - numerical input.
+    output: the output values of the network.
+    """
+    def output_function(self, input):
+        with self._graph.as_default():
+            zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
+            con_input = np.concatenate((zero_padd, input), axis=1)
+            output = self._sess.run(self._outputs, feed_dict={self.x: con_input})
+        return output[:, 0:-1, :]
 
     """
     gen_function: generate samples.
@@ -175,7 +207,7 @@ class _arRNN(object):
     input: 
     output: 
     """
-    def full_train(self, dataset, max_epoch, earlyStop, learning_rate):
+    def full_train(self, dataset, max_epoch, earlyStop, learning_rate, saveto):
         # slit the dataset.
         trainData = dataset['train']
         validData = dataset['valid']
@@ -185,22 +217,69 @@ class _arRNN(object):
 
         historyLoss = []                   # <list> record the training process.
         worseCase = 0                       # indicate the worse cases for early stopping
+        bestEpoch = -1
+
         for epoch in range(max_epoch):
-            epochLoss = []
+
+            # update the model w.r.t the training set and record the average loss.
+            trainLoss = []
             trainBatch = get_batches_idx(len(trainData), self._batch_size, True)
-            for trainIdx in trainBatch:
-                trainInput = trainData[trainIdx]
-                # padding the batch whose size is less than batch size.
-                if len(trainIdx) < self._batch_size:
-                    inputShape = list(trainData[trainIdx].shape)
-                    inputShape[0] = self._batch_size - len(trainIdx)
-                    trainInput = np.concatenate((trainData[trainIdx], np.zeros(inputShape)), 0)
-                epochLoss.append(self.train_function(trainInput, learning_rate))
-            print(np.asarray(epochLoss).mean())
-            # TODO: add or cut the padding of the length.
-            # TODO: add the early stopping and save models.
-            # TODO: add the event writer to save the training process.
-            pass
+            for Idx in trainBatch:
+                x = trainData[Idx]
+                trainLoss.append(x.shape[0]*self.train_function(x, learning_rate))
+            trainLoss_avg = np.asarray(trainLoss).sum()/len(trainData)
+
+            # evaluate the model w.r.t the valid set and record the average loss.
+            validLoss = []
+            for Idx in validBatch:
+                x = validData[Idx]
+                validLoss.append(x.shape[0]*self.train_function(x, learning_rate))
+            validLoss_avg = np.asarray(validLoss).sum()/len(validData)
+            print("In epoch \x1b[1;32m%4d\x1b[0m: the training loss is "
+                  "\x1b[1;32m%10.4f\x1b[0m; the valid loss is \x1b[1;32m%10.4f\x1b[0m." % (epoch, trainLoss_avg, validLoss_avg))
+
+            # check the early stopping conditions.
+            if len(historyLoss)==0 or validLoss_avg < np.min(np.asarray(historyLoss)[:, 1]):
+                worseCase = 0
+                bestEpoch = epoch
+                self.saveModel()
+            else:
+                worseCase += 1
+            historyLoss.append([trainLoss_avg, validLoss_avg])
+
+            if worseCase >= earlyStop:
+                break
+
+        # evaluate the best model w.r.t the test set and record the average loss.
+        self.loadModel(self._savePath)
+
+        trainLoss = []
+        trainBatch = get_batches_idx(len(trainData), self._batch_size, True)
+        for Idx in trainBatch:
+            x = trainData[Idx]
+            trainLoss.append(x.shape[0] * self.train_function(x, learning_rate))
+        trainLoss_avg = np.asarray(trainLoss).sum() / len(trainData)
+
+        validLoss = []
+        for Idx in validBatch:
+            x = validData[Idx]
+            validLoss.append(x.shape[0] * self.train_function(x, learning_rate))
+        validLoss_avg = np.asarray(validLoss).sum() / len(validData)
+
+        testLoss = []
+        for Idx in testBatch:
+            x = testData[Idx]
+            testLoss.append(x.shape[0] * self.train_function(x, learning_rate))
+        testLoss_avg = np.asarray(testLoss).sum() / len(testData)
+
+        # evaluate the model w.r.t the valid set and record the average loss.
+        print("BEST MODEL from epoch \x1b[1;91m%4d\x1b[0m with training loss"
+              " \x1b[1;91m%10.4f\x1b[0m and valid loss \x1b[1;91m%10.4f\x1b[0m."
+              % (bestEpoch, trainLoss_avg, validLoss_avg))
+        print('The testing loss is \x1b[1;91m%10.4f\x1b[0m.' % testLoss_avg)
+
+        if saveto is not None:
+            np.savez(saveto, historyLoss=np.asarray(historyLoss), testLoss=testLoss_avg)
         return
 
 
@@ -231,39 +310,18 @@ class binRNN(_arRNN, object):
                 # define the loss function.
                 self._loss = tf.losses.sigmoid_cross_entropy(self.x[:, 1:, :], logits[:, 0:-1, :])
                 self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-                self._train_step = self._optimizer.minimize(self._loss)
+                self._train_step = self._optimizer.minimize(tf.cast(tf.shape(self.x), tf.float32)[-1]*self._loss)
                 self._runSession()
 
     """
-    train_function: reconstruct the train_function of _arRNN
-    """
-    def train_function(self, input, lrate):
-        with self._graph.as_default():
-            zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
-            con_input = np.concatenate((zero_padd, input), axis=1)
-            _, loss_value = self._sess.run([self._train_step, self._loss],
-                                           feed_dict={self.x: con_input, self.lr: lrate})
-        return loss_value * input.shape[-1]
-
-    """
-    val_function: reconstruct the val_function of _arRNN
-    """
-    def val_function(self, input):
-        with self._graph.as_default():
-            zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
-            con_input = np.concatenate((zero_padd, input), axis=1)
-            loss_value = self._sess.run(self._loss, feed_dict={self.x: con_input})
-        return loss_value * input.shape[-1]
-
-    """
-    gen_function: reconstruct the gen_function of _arRNN
+    gen_function: reconstruction of the gen_function in class: arRNN.
     """
     def gen_function(self, numSteps):
         with self._graph.as_default():
             state = self._cell.zero_state(1, dtype=tf.float32)
             x_ = tf.zeros((1, self._dimLayer[0]), dtype='float32')
             samples = []
-            with tf.variable_scope('logit', reuse=True):        # reuse the output layer.
+            with tf.variable_scope('logit', reuse=True):  # reuse the output layer.
                 W = tf.get_variable('weight')
                 b = tf.get_variable('bias')
                 for i in range(numSteps):
@@ -273,7 +331,6 @@ class binRNN(_arRNN, object):
                     samples.append(x_)
             samples = tf.concat(samples, 0)
         return self._sess.run(samples)
-
 
 
 """

@@ -7,10 +7,14 @@ import tensorflow as tf
 Class: config - Basic configuration of the auto-regressive RNN.
 """
 class config(object):
+    """
+    Elements outside the __init__ method are static elements.
+    Elements inside the __init__ method are elements of the object.
+    ----from Stackoverflow(https://stackoverflow.com/questions/9056957/correct-way-to-define-class-variables-in-python).
+    """
     unitType = 'LSTM'           # <string> the type of hidden units(LSTM/GRU/Tanh).
     dimLayer = []               # <scalar list> the size of each layers [input, hiddens, output].
-    max_steps=1                 # <scalar> the max length of sequence.
-    batch_size = 1              # <scalar> the batch size
+    batch_size=1                # <scalar> the batch size.
     init_scale = 0.1            # <scalar> the initialized scales of the weight.
     float = 'float32'           # <string> the type of float.
     Opt = 'SGD'                 # <string> the optimization method.
@@ -48,7 +52,7 @@ def hidden_net(
             else:
                 layers.append(tf.nn.rnn_cell.BasicRNNCell(num_units=Config.dimLayer[i + 1]))
         cells = tf.contrib.rnn.MultiRNNCell(layers, state_is_tuple=True)
-        state = cells.zero_state(Config.batch_size, Config.float)
+        state = cells.zero_state(tf.shape(x)[0], Config.float)
 
         #output: [batch_size, max_time, cell.output_size]
         outputs, _ = tf.nn.dynamic_rnn(cells, x, initial_state=state)
