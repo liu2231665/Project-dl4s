@@ -6,6 +6,7 @@ import tensorflow as tf
 from .utility import hidden_net
 from dl4stochastic.tools import get_batches_idx
 import numpy as np
+import time
 
 """
 Class: arRNN - the hyper abstraction of the auto-regressive RNN.
@@ -216,11 +217,12 @@ class _arRNN(object):
         testBatch = get_batches_idx(len(testData), self._batch_size, False)
 
         historyLoss = []                   # <list> record the training process.
+        durations = []                      # <list> record the training duration.
         worseCase = 0                       # indicate the worse cases for early stopping
         bestEpoch = -1
 
         for epoch in range(max_epoch):
-
+            start_time = time.time() # the start time of epoch.
             # update the model w.r.t the training set and record the average loss.
             trainLoss = []
             trainBatch = get_batches_idx(len(trainData), self._batch_size, True)
@@ -228,6 +230,9 @@ class _arRNN(object):
                 x = trainData[Idx]
                 trainLoss.append(x.shape[0]*self.train_function(x, learning_rate))
             trainLoss_avg = np.asarray(trainLoss).sum()/len(trainData)
+
+            duration = time.time() - start_time  # the duration of one epoch.
+            durations.append(duration)
 
             # evaluate the model w.r.t the valid set and record the average loss.
             validLoss = []
@@ -246,9 +251,11 @@ class _arRNN(object):
             else:
                 worseCase += 1
             historyLoss.append([trainLoss_avg, validLoss_avg])
-
             if worseCase >= earlyStop:
                 break
+
+        durationEpoch = np.asarray(durations).mean()
+        print('The average epoch duration is \x1b[1;91m%10.4f\x1b[0m seconds.' % durationEpoch)
 
         # evaluate the best model w.r.t the test set and record the average loss.
         self.loadModel(self._savePath)
@@ -279,7 +286,8 @@ class _arRNN(object):
         print('The testing loss is \x1b[1;91m%10.4f\x1b[0m.' % testLoss_avg)
 
         if saveto is not None:
-            np.savez(saveto, historyLoss=np.asarray(historyLoss), testLoss=testLoss_avg)
+            np.savez(saveto, historyLoss=np.asarray(historyLoss),
+                     testLoss=testLoss_avg, durationEpoch=durationEpoch)
         return
 
 
