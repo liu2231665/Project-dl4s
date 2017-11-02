@@ -328,7 +328,7 @@ class binRNN(_arRNN, object):
                 logits = tf.tensordot(self._hiddenOutput, W, [[-1], [0]]) + b
                 self._outputs = tf.nn.sigmoid(logits)
                 # define the loss function.
-                self._loss = tf.losses.sigmoid_cross_entropy(self.x[:, 1:, :], self._outputs[:, 0:-1, :])
+                self._loss = tf.losses.sigmoid_cross_entropy(self.x[:, 1:, :], logits[:, 0:-1, :])
                 self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
                 self._train_step = self._optimizer.minimize(tf.cast(tf.shape(self.x), tf.float32)[-1]*self._loss)
                 self._runSession()

@@ -9,10 +9,11 @@ from Projects.LakhMidi.fetchData import fetchData
 from dl4s import binRNN, configRNN
 import os
 
+configRNN.unitType = "GRU"
 configRNN.savePath = "./binRNN/"
 configRNN.eventPath = "./binRNN/"
 configRNN.dimLayer = [128, 500, 128]
-configRNN.init_scale = 0.1
+configRNN.init_scale = 0.01
 SAVETO = './binRNN/historyMidiRNN.npz'
 
 Flag = 'training'                       # {'training'/'evaluation'}
@@ -30,7 +31,7 @@ if __name__ == '__main__':
         # Build the model and prepare the data-set.
         Dataset = fetchData()
         RNN = binRNN(configRNN)
-        RNN.full_train(dataset=Dataset, maxEpoch=500, batchSize=125, earlyStop=10, learning_rate=0.2,
+        RNN.full_train(dataset=Dataset, maxEpoch=500, batchSize=125, earlyStop=10, learning_rate=0.1,
                           valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':
