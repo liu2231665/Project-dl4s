@@ -1,11 +1,15 @@
-# Tools to build an RNN.
-# Author: Yingru Liu
-# Institute: Stony Brook University
+"""#########################################################################
+Author: Yingru Liu
+Institute: Stony Brook University
+Descriptions: Tools to build an RNN.
+              ----2017.11.01
+#########################################################################"""
+
 import tensorflow as tf
 
-"""
+"""#########################################################################
 Class: config - Basic configuration of the auto-regressive RNN.
-"""
+#########################################################################"""
 class config(object):
     """
     Elements outside the __init__ method are static elements.
@@ -14,7 +18,6 @@ class config(object):
     """
     unitType = 'LSTM'           # <string> the type of hidden units(LSTM/GRU/Tanh).
     dimLayer = []               # <scalar list> the size of each layers [input, hiddens, output].
-    batch_size=1                # <scalar> the batch size.
     init_scale = 0.1            # <scalar> the initialized scales of the weight.
     float = 'float32'           # <string> the type of float.
     Opt = 'SGD'                 # <string> the optimization method.
@@ -23,14 +26,14 @@ class config(object):
     loadPath = None             # <string/None> the path to load the model.
 
 #
-"""
+"""#########################################################################
 hidden_net: function to build the hidden layers of the RNN
 input: x - network input indicated by <tensor placeholder>. 
        Config - configuration class.
 output: cells - tensorflow symbol for the hidden layers of the multi-layer RNN.
         outputs.reshape - the output of last hidden layer.
         initializer - the initializer that may be used later.
-"""
+#########################################################################"""
 def hidden_net(
         x,
         graph,

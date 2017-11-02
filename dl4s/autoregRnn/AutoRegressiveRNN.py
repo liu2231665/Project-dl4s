@@ -1,23 +1,27 @@
-# Autoregressive RNN with logistic outputs.
-# Author: Yingru Liu
-# Institute: Stony Brook University
+"""#########################################################################
+Author: Yingru Liu
+Institute: Stony Brook University
+Descriptions: This file contains the Autoregressive RNN with arbitrary
+              structures for both the binary and continuous inputs.
+              ----2017.11.01
+#########################################################################"""
 
 import tensorflow as tf
 from .utility import hidden_net
-from dl4stochastic.tools import get_batches_idx
+from dl4s.tools import get_batches_idx
 import numpy as np
 import time
 
-"""
+"""#########################################################################
 Class: arRNN - the hyper abstraction of the auto-regressive RNN.
-"""
+#########################################################################"""
 class _arRNN(object):
 
-    """
+    """#########################################################################
     __init__:the initialization function.
     input: Config - configuration class in ./utility.
     output: None.
-    """
+    #########################################################################"""
     def __init__(
             self,
             Config,
@@ -31,8 +35,6 @@ class _arRNN(object):
 
         # <tensor graph> define a default graph.
         self._graph = tf.Graph()
-        # <scalar>
-        self._batch_size = Config.batch_size
 
         with self._graph.as_default():
             # <tensor placeholder> input.
@@ -81,11 +83,11 @@ class _arRNN(object):
             self._sess = tf.Session(graph=self._graph)
         return
 
-    """
+    """#########################################################################
     _runSession: initialize the graph or restore from the load path.
     input: None.
     output: None.
-    """
+    #########################################################################"""
     def _runSession(self):
         if self._loadPath is None:
             self._sess.run(tf.global_variables_initializer())
@@ -94,12 +96,12 @@ class _arRNN(object):
             saver.restore(self._sess, self._loadPath)
         return
 
-    """
+    """#########################################################################
     train_function: compute the loss and update the tensor variables.
     input: input - numerical input.
            lrate - <scalar> learning rate.
     output: the loss value.
-    """
+    #########################################################################"""
     def train_function(self, input, lrate):
         with self._graph.as_default():
             zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
@@ -108,11 +110,11 @@ class _arRNN(object):
                                            feed_dict={self.x: con_input, self.lr: lrate})
         return loss_value * input.shape[-1]
 
-    """
+    """#########################################################################
     val_function: compute the loss with given input.
     input: input - numerical input.
     output: the loss value.
-    """
+    #########################################################################"""
     def val_function(self, input):
         with self._graph.as_default():
             zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
@@ -120,11 +122,11 @@ class _arRNN(object):
             loss_value = self._sess.run(self._loss, feed_dict={self.x: con_input})
         return loss_value * input.shape[-1]
 
-    """
+    """#########################################################################
     output_function: compute the output with given input.
     input: input - numerical input.
     output: the output values of the network.
-    """
+    #########################################################################"""
     def output_function(self, input):
         with self._graph.as_default():
             zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
@@ -132,19 +134,19 @@ class _arRNN(object):
             output = self._sess.run(self._outputs, feed_dict={self.x: con_input})
         return output[:, 0:-1, :]
 
-    """
+    """#########################################################################
     gen_function: generate samples.
     input: numSteps - the length of the sample sequence.
     output: should be the sample.
-    """
+    #########################################################################"""
     def gen_function(self, numSteps):
         return
 
-    """
+    """#########################################################################
     saveModel:save the trained model into disk.
     input: savePath - another saving path, if not provide, use the default path.
     output: None
-    """
+    #########################################################################"""
     def saveModel(self, savePath=None):
         with self._graph.as_default():
             # Create a saver.
@@ -155,11 +157,11 @@ class _arRNN(object):
                 saver.save(self._sess, savePath)
         return
 
-    """
+    """#########################################################################
     loadModel:load the model from disk.
     input: loadPath - another loading path, if not provide, use the default path.
     output: None
-    """
+    #########################################################################"""
     def loadModel(self, loadPath=None):
         with self._graph.as_default():
             # Create a saver.
@@ -174,12 +176,12 @@ class _arRNN(object):
         return
 
 
-    """
+    """#########################################################################
     saveEvent:save the event to visualize the last model once.
               (To visualize other aspects, other codes should be used.)
     input: None
     output: None
-    """
+    #########################################################################"""
     def saveEvent(self):
         with self._graph.as_default():
             # compute the statistics of the parameters.
@@ -203,31 +205,41 @@ class _arRNN(object):
             Writer.close()
         return
 
-    """
+    """#########################################################################
     full_train: define to fully train a model given the dataset.
-    input: 
-    output: 
-    """
-    def full_train(self, dataset, max_epoch, earlyStop, learning_rate, saveto):
+    input: dataset - the dataset used to train. The split should be train/valid
+                     /test.
+           maxEpoch - the maximum epoches to train the model.
+           batchSize - the batch size for training.
+           earlyStop - the tolerance epoches for early stopping.
+           learning_rate - you know what it is...
+           saveto - the additional save path that may be different from
+                    the default to save the history loss during training.
+           valid_batchSize - the batch size for validation and testing.
+    output: None.
+    #########################################################################"""
+    def full_train(self, dataset, maxEpoch, batchSize, earlyStop,
+                   learning_rate, saveto, valid_batchSize=1):
         # slit the dataset.
         trainData = dataset['train']
         validData = dataset['valid']
         testData = dataset['test']
-        validBatch = get_batches_idx(len(validData), self._batch_size, False)
-        testBatch = get_batches_idx(len(testData), self._batch_size, False)
+        validBatch = get_batches_idx(len(validData), valid_batchSize, False)
+        testBatch = get_batches_idx(len(testData), valid_batchSize, False)
 
         historyLoss = []                   # <list> record the training process.
         durations = []                      # <list> record the training duration.
         worseCase = 0                       # indicate the worse cases for early stopping
         bestEpoch = -1
 
-        for epoch in range(max_epoch):
+        # Issue: the idx should be a list. Hence, .tolist() is required.
+        for epoch in range(maxEpoch):
             start_time = time.time() # the start time of epoch.
             # update the model w.r.t the training set and record the average loss.
             trainLoss = []
-            trainBatch = get_batches_idx(len(trainData), self._batch_size, True)
+            trainBatch = get_batches_idx(len(trainData), batchSize, True)
             for Idx in trainBatch:
-                x = trainData[Idx]
+                x = trainData[Idx.tolist()]
                 trainLoss.append(x.shape[0]*self.train_function(x, learning_rate))
             trainLoss_avg = np.asarray(trainLoss).sum()/len(trainData)
 
@@ -237,7 +249,7 @@ class _arRNN(object):
             # evaluate the model w.r.t the valid set and record the average loss.
             validLoss = []
             for Idx in validBatch:
-                x = validData[Idx]
+                x = validData[Idx.tolist()]
                 validLoss.append(x.shape[0]*self.train_function(x, learning_rate))
             validLoss_avg = np.asarray(validLoss).sum()/len(validData)
             print("In epoch \x1b[1;32m%4d\x1b[0m: the training loss is "
@@ -261,21 +273,21 @@ class _arRNN(object):
         self.loadModel(self._savePath)
 
         trainLoss = []
-        trainBatch = get_batches_idx(len(trainData), self._batch_size, True)
+        trainBatch = get_batches_idx(len(trainData), batchSize, True)
         for Idx in trainBatch:
-            x = trainData[Idx]
+            x = trainData[Idx.tolist()]
             trainLoss.append(x.shape[0] * self.train_function(x, learning_rate))
         trainLoss_avg = np.asarray(trainLoss).sum() / len(trainData)
 
         validLoss = []
         for Idx in validBatch:
-            x = validData[Idx]
+            x = validData[Idx.tolist()]
             validLoss.append(x.shape[0] * self.train_function(x, learning_rate))
         validLoss_avg = np.asarray(validLoss).sum() / len(validData)
 
         testLoss = []
         for Idx in testBatch:
-            x = testData[Idx]
+            x = testData[Idx.tolist()]
             testLoss.append(x.shape[0] * self.train_function(x, learning_rate))
         testLoss_avg = np.asarray(testLoss).sum() / len(testData)
 
@@ -292,9 +304,9 @@ class _arRNN(object):
 
 
 
-"""
+"""#########################################################################
 Class: binRNN - the hyper abstraction of the auto-regressive RNN.
-"""
+#########################################################################"""
 class binRNN(_arRNN, object):
     """
         __init__:the initialization function.
@@ -321,9 +333,9 @@ class binRNN(_arRNN, object):
                 self._train_step = self._optimizer.minimize(tf.cast(tf.shape(self.x), tf.float32)[-1]*self._loss)
                 self._runSession()
 
-    """
+    """#########################################################################
     gen_function: reconstruction of the gen_function in class: arRNN.
-    """
+    #########################################################################"""
     def gen_function(self, numSteps):
         with self._graph.as_default():
             state = self._cell.zero_state(1, dtype=tf.float32)

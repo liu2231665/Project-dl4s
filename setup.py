@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-setup(name='dl4stochastic',
+setup(name='dl4s',
       version='0.0.0',
       url='https://github.com/liu2231665/dl4stochastic.git',
       license='MIT',

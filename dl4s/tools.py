@@ -1,15 +1,18 @@
-# Common Tools such as dataset fetching.
-# Author: Yingru Liu
-# Institute: Stony Brook University
+"""#########################################################################
+Author: Yingru Liu
+Institute: Stony Brook University
+Descriptions: Common Tools that will be used by all the models.
+              ----2017.11.01
+#########################################################################"""
 
 import numpy as np
 
-"""
+"""#########################################################################
 get_minibatches_idx: Used to shuffle the dataset at each iteration.
 input: len - the length the dataset section.
        batch_size - the batch size.
        shuffle - bool indicating whether shuffle the idx.
-"""
+#########################################################################"""
 def get_batches_idx(len, batch_size, shuffle=True):
 
     idx_list = np.arange(len, dtype="int32")
