@@ -30,8 +30,8 @@ if __name__ == '__main__':
         # Build the model and prepare the data-set.
         Dataset = fetchData()
         RNN = binRNN(configRNN)
-        RNN.full_train(dataset=Dataset, maxEpoch=500, batchSize=250, earlyStop=10, learning_rate=0.2,
-                          valid_batchSize=250, saveto=SAVETO)
+        RNN.full_train(dataset=Dataset, maxEpoch=500, batchSize=125, earlyStop=10, learning_rate=0.2,
+                          valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':
         pass
