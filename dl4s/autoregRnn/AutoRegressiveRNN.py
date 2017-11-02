@@ -240,7 +240,7 @@ class _arRNN(object):
             trainBatch = get_batches_idx(len(trainData), batchSize, True)
             for Idx in trainBatch:
                 x = trainData[Idx.tolist()]
-                trainLoss.append(x.shape[-1]*self.train_function(x, learning_rate))
+                trainLoss.append(x.shape[0]*self.train_function(x, learning_rate))
             trainLoss_avg = np.asarray(trainLoss).sum()/len(trainData)
 
             duration = time.time() - start_time  # the duration of one epoch.
@@ -250,7 +250,7 @@ class _arRNN(object):
             validLoss = []
             for Idx in validBatch:
                 x = validData[Idx.tolist()]
-                validLoss.append(x.shape[-1]*self.train_function(x, learning_rate))
+                validLoss.append(x.shape[0]*self.train_function(x, learning_rate))
             validLoss_avg = np.asarray(validLoss).sum()/len(validData)
             print("In epoch \x1b[1;32m%4d\x1b[0m: the training loss is "
                   "\x1b[1;32m%10.4f\x1b[0m; the valid loss is \x1b[1;32m%10.4f\x1b[0m." % (epoch, trainLoss_avg, validLoss_avg))
@@ -276,19 +276,19 @@ class _arRNN(object):
         trainBatch = get_batches_idx(len(trainData), batchSize, True)
         for Idx in trainBatch:
             x = trainData[Idx.tolist()]
-            trainLoss.append(x.shape[-1] * self.train_function(x, learning_rate))
+            trainLoss.append(x.shape[0] * self.train_function(x, learning_rate))
         trainLoss_avg = np.asarray(trainLoss).sum() / len(trainData)
 
         validLoss = []
         for Idx in validBatch:
             x = validData[Idx.tolist()]
-            validLoss.append(x.shape[-1] * self.train_function(x, learning_rate))
+            validLoss.append(x.shape[0] * self.train_function(x, learning_rate))
         validLoss_avg = np.asarray(validLoss).sum() / len(validData)
 
         testLoss = []
         for Idx in testBatch:
             x = testData[Idx.tolist()]
-            testLoss.append(x.shape[-1] * self.train_function(x, learning_rate))
+            testLoss.append(x.shape[0] * self.train_function(x, learning_rate))
         testLoss_avg = np.asarray(testLoss).sum() / len(testData)
 
         # evaluate the model w.r.t the valid set and record the average loss.
