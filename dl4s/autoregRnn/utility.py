@@ -6,6 +6,7 @@ Descriptions: Tools to build an RNN.
 #########################################################################"""
 
 import tensorflow as tf
+import numpy as np
 
 """#########################################################################
 Class: config - Basic configuration of the auto-regressive RNN.
@@ -60,3 +61,14 @@ def hidden_net(
         #output: [batch_size, max_time, cell.output_size]
         outputs, _ = tf.nn.dynamic_rnn(cells, x, initial_state=state)
     return cells, outputs, initializer
+
+"""#########################################################################
+GaussNLL: function to compute the gaussian negative log-likelihood of a RNN.
+input: x - network input indicated by <tensor placeholder>. 
+       mean - mean of the Gaussian distribution computed by the graph.
+       sigma - variance of the Gaussian distribution computed by the graph.
+output: nll - a tensor representing the NLL per bit.
+#########################################################################"""
+def GaussNLL(x, mean, sigma):
+    nll = 0.5*tf.reduce_mean(tf.div(tf.square(x-mean), sigma) + tf.log(sigma)) + tf.log(2*np.pi)
+    return nll

@@ -7,7 +7,7 @@ Descriptions: This file contains the Autoregressive RNN with arbitrary
 #########################################################################"""
 
 import tensorflow as tf
-from .utility import hidden_net
+from .utility import hidden_net, GaussNLL
 from dl4s.tools import get_batches_idx
 import numpy as np
 import time
@@ -305,7 +305,8 @@ class _arRNN(object):
 
 
 """#########################################################################
-Class: binRNN - the hyper abstraction of the auto-regressive RNN.
+Class: binRNN - the auto-regressive Recurrent Neural Network for stochastic
+                binary inputs.
 #########################################################################"""
 class binRNN(_arRNN, object):
     """
@@ -350,17 +351,100 @@ class binRNN(_arRNN, object):
                     x_ = tf.distributions.Bernoulli(probs=probs, dtype=tf.float32).sample()
                     samples.append(x_)
             samples = tf.concat(samples, 0)
-        return self._sess.run(samples)
+        return self._sess.run(samples).T
 
+
+"""#########################################################################
+Class: gaussRNN - the auto-regressive Recurrent Neural Network for stochastic
+                binary inputs.
+#########################################################################"""
+class gaussRNN(_arRNN, object):
+    """
+    __init__: the initialization function.
+    input: Config - configuration class in ./ utility.
+    output: None.
+    """
+    def __init__(
+            self,
+            Config,
+    ):
+        _arRNN.__init__(self, Config)
+
+        # add the output layer at the top of hidden output.
+        with self._graph.as_default():
+            with tf.variable_scope('logit', initializer=self._initializer):
+                # define the Gaussian output layer with diagonal layer.
+                W_mu = tf.get_variable('weight_mu', shape=(Config.dimLayer[-2], Config.dimLayer[-1]))
+                b_mu = tf.get_variable('bias_mu', shape=Config.dimLayer[-1], initializer=tf.zeros_initializer)
+                W_sig = tf.get_variable('weight_sig', shape=(Config.dimLayer[-2], Config.dimLayer[-1]))
+                b_sig = tf.get_variable('bias_sig', shape=Config.dimLayer[-1], initializer=tf.zeros_initializer)
+                # mu - the mean of the conditional Gaussian distribution.
+                # sig -  the variance of the conditional Gaussian distribution.
+                #        (positive definiteness is assured by softplus function.)
+                mu = tf.tensordot(self._hiddenOutput, W_mu, [[-1], [0]]) + b_mu
+                sig = tf.nn.softplus(tf.tensordot(self._hiddenOutput, W_sig, [[-1], [0]]) + b_sig) + 1e-8
+                self._outputs = [mu, sig]
+                # define the loss function as negative log-likelihood.
+                self._loss = GaussNLL(x=self.x[:, 1:, :], mean=mu[:, 0:-1, :], sigma=sig[:, 0:-1, :])
+                self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+                self._train_step = self._optimizer.minimize(tf.cast(tf.shape(self.x), tf.float32)[-1]*self._loss)
+                self._runSession()
+
+    """#########################################################################
+    gen_function: reconstruction of the gen_function in class: arRNN.
+    #########################################################################"""
+    def gen_function(self, numSteps):
+        with self._graph.as_default():
+            state = self._cell.zero_state(1, dtype=tf.float32)
+            x_ = tf.zeros((1, self._dimLayer[0]), dtype='float32')
+            samples = []
+            with tf.variable_scope('logit', reuse=True):  # reuse the output layer.
+                W_mu = tf.get_variable('weight_mu')
+                b_mu = tf.get_variable('bias_mu')
+                W_sig = tf.get_variable('weight_sig')
+                b_sig = tf.get_variable('bias_sig')
+                for i in range(numSteps):
+                    hidde_, state = self._cell(x_, state)
+                    mu = tf.nn.xw_plus_b(hidde_, W_mu, b_mu)
+                    sig = tf.nn.softplus(tf.nn.xw_plus_b(hidde_, W_sig, b_sig)) + 1e-8
+                    x_ = tf.distributions.Normal(loc=mu, scale=tf.sqrt(sig)).sample()
+                    samples.append(x_)
+            samples = tf.concat(samples, 0)
+        return self._sess.run(samples).T
 
 """
 --------------------------------------------------------------------------------------------
 """
-class gaussRNN(_arRNN):
-    pass
+class gaussRNN_cov(gaussRNN, object):
+    """
+        __init__: the initialization function.
+        input: Config - configuration class in ./ utility.
+        output: None.
+        """
+
+    def __init__(
+            self,
+            Config,
+    ):
+        gaussRNN.__init__(self, Config)
+        # revise the output layer of the gaussRNN.
+        with self._graph.as_default():
+            with tf.variable_scope('logit', initializer=self._initializer, reuse=True):
+                W_sig = tf.get_variable('weight_sig')
+                b_sig = tf.get_variable('bias_sig')
+                # TODO: compute the no-diagonal covariance.
+                pass
+
+
 
 """
 --------------------------------------------------------------------------------------------
 """
 class gmmRNN(_arRNN):
+    pass
+
+"""
+--------------------------------------------------------------------------------------------
+"""
+class gmmRNN_cov(_arRNN):
     pass
