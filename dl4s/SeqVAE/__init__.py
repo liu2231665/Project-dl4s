@@ -1,0 +1,1 @@
+from dl4s.autoregRnn.utility import hidden_net

@@ -351,7 +351,7 @@ def fetchData():
     times = 1
     while 1:
         if os.path.exists(Lakh_HDF5):
-            # TODO: load the .hdf5 dataset
+            # load the .hdf5 dataset
             print("\x1b[1;34m----->> LOAD THE DATASET <<-----\x1b[0m")
             Dataset = h5py.File(Lakh_HDF5, 'r')
             break

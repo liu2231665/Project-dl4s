@@ -63,7 +63,8 @@ def hidden_net(
     return cells, outputs, initializer
 
 """#########################################################################
-GaussNLL: function to compute the gaussian negative log-likelihood of a RNN.
+GaussNLL: function to compute the negative log-likelihood of Gaussian 
+          distribution with a diagonal covariance matrix.
 input: x - network input indicated by <tensor placeholder>. 
        mean - mean of the Gaussian distribution computed by the graph.
        sigma - variance of the Gaussian distribution computed by the graph.
