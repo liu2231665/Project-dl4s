@@ -345,7 +345,11 @@ def readMIDI(path):
     midi = midi > 0
     return np.asarray(midi, 'float32')
 
-
+"""#########################################################################
+fetchData: return the data-set or download and preprocess the raw data.
+input: None.
+output: Dataset - the preprocessed dataset.
+#########################################################################"""
 def fetchData():
     Dataset = None
     times = 1

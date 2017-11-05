@@ -7,16 +7,18 @@ Descriptions: the code to train and run the binRNN from dl4s.autoregRNN
 #########################################################################"""
 from Projects.LakhMidi.fetchData import fetchData
 from dl4s import binRNN, configRNN
+from Projects.LakhMidi.accTool import accRNN
 import os
 
 configRNN.unitType = "GRU"
+#configRNN.Opt = 'Momentum'
 configRNN.savePath = "./binRNN/"
 configRNN.eventPath = "./binRNN/"
 configRNN.dimLayer = [128, 500, 128]
 configRNN.init_scale = 0.01
 SAVETO = './binRNN/historyMidiRNN.npz'
 
-Flag = 'training'                       # {'training'/'evaluation'}
+Flag = 'evaluation'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
     if Flag == 'training':
@@ -31,8 +33,13 @@ if __name__ == '__main__':
         # Build the model and prepare the data-set.
         Dataset = fetchData()
         RNN = binRNN(configRNN)
-        RNN.full_train(dataset=Dataset, maxEpoch=500, batchSize=125, earlyStop=10, learning_rate=0.1,
+        RNN.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.1,
                           valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':
-        pass
+        configRNN.loadPath =  os.path.join(configRNN.savePath, 'RNN-I')
+        Dataset = fetchData()
+        RNN = binRNN(configRNN)
+        print('Evaluation: start computing the accuracy metric.')
+        ACC = accRNN(RNN, Dataset['test'], batchSize=125)
+        print('The testing transcription accuracy is \x1b[1;91m%10.4f\x1b[0m.' % ACC)

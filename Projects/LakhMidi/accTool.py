@@ -17,6 +17,7 @@ Descriptions: the file contain the tools to compute the accuracy of the
 #########################################################################"""
 
 import numpy as np
+from dl4s.tools import get_batches_idx
 
 """#########################################################################
 Function: accRNN - compute the average accuracy of piano-rolls for RNN
@@ -25,15 +26,16 @@ input: RNN - the well-trained RNN model.
        batches_idx - the batches.
 output: ACC - the average accuracy per frame over the test set.
 #########################################################################"""
-def accRNN(RNN, testSet, batches):
+def accRNN(RNN, testSet, batchSize):
     ACC = []
+    batches = get_batches_idx(len(testSet), batchSize)
     for Idx in batches:
         x = testSet[Idx.tolist()]           # get the batch of input sequence.
         prob = RNN.output_function(x)       # compute the probability of x. [batch, length, frame]
         TP = np.asarray((x == 1) & (prob >= 0.5), 'float32').sum(axis=-1)
         FP = np.asarray((x == 0) & (prob >= 0.5), 'float32').sum(axis=-1)
         FN = np.asarray((x == 1) & (prob < 0.5), 'float32').sum(axis=-1)
-        acc = TP / (FN + FP + TP)
+        acc = TP / (FN + FP + TP + 1e-8)
         ACC.append(acc.mean()*x.shape[0])
     ACC = np.asarray(ACC).sum() / len(testSet)
     return ACC

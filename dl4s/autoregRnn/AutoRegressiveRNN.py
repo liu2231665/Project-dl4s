@@ -74,7 +74,7 @@ class _arRNN(object):
             elif Config.Opt == 'Adam':
                 self._optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
             elif Config.Opt == 'Momentum':
-                self._optimizer = tf.train.MomentumOptimizer(self.lr, 0.5)
+                self._optimizer = tf.train.MomentumOptimizer(self.lr, 0.9)
             elif Config.Opt == 'SGD':
                 self._optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.lr)
             else:
