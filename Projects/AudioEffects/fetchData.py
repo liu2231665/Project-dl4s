@@ -30,12 +30,12 @@ def fetchData():
             print("Step \x1b[1;34m%d\x1b[0m: normalize the raw dataset." % times)
             times += 1
             Dataset = h5py.File(Blizzard_HDF5, 'r')
-            #L = int(len(Dataset['train']) / 2)
-            train = Dataset['train']
-            #L = int(len(Dataset['valid']) / 2)
-            valid = Dataset['valid']
-            #L = int(len(Dataset['test']) / 2)
-            test = Dataset['test']
+            L = int(len(Dataset['train']) / 4)
+            train = Dataset['train'][0:L, :, :]
+            L = int(len(Dataset['valid']) / 4)
+            valid = Dataset['valid'][0:L, :, :]
+            L = int(len(Dataset['test']) / 4)
+            test = Dataset['test'][0:L, :, :]
             batches = get_batches_idx(len(train), batch_size=1024, shuffle=False)
             # compute the mean
             temp = []
