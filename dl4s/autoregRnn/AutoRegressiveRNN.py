@@ -415,7 +415,7 @@ class gaussRNN(_arRNN, object):
 """
 --------------------------------------------------------------------------------------------
 """
-class gaussRNN_cov(gaussRNN, object):
+class gaussRNN_cov(_arRNN, object):
     """
         __init__: the initialization function.
         input: Config - configuration class in ./ utility.
@@ -426,13 +426,10 @@ class gaussRNN_cov(gaussRNN, object):
             self,
             Config,
     ):
-        gaussRNN.__init__(self, Config)
+        _arRNN.__init__(self, Config)
         # revise the output layer of the gaussRNN.
         with self._graph.as_default():
-            with tf.variable_scope('logit', initializer=self._initializer, reuse=True):
-                W_sig = tf.get_variable('weight_sig')
-                b_sig = tf.get_variable('bias_sig')
-                # TODO: compute the no-diagonal covariance.
+            with tf.variable_scope('logit', initializer=self._initializer):
                 pass
 
 

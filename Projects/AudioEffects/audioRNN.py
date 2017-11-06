@@ -13,11 +13,11 @@ import h5py
 
 configRNN.unitType = "GRU"
 configRNN.Opt = 'Adam'
-configRNN.savePath = "./blizzardRNN/"
-configRNN.eventPath = "./blizzardRNN/"
-configRNN.dimLayer = [200, 1024, 200]
+configRNN.savePath = "./audioRNN/"
+configRNN.eventPath = "./audioRNN/"
+configRNN.dimLayer = [150, 500, 150]
 configRNN.init_scale = 0.01
-SAVETO = './blizzardRNN/historyblizzardRNN.npz'
+SAVETO = './audioRNN/historyRNN.npz'
 
 Flag = 'training'                       # {'training'/'evaluation'}
 
@@ -34,7 +34,7 @@ if __name__ == '__main__':
         # Add the save file name into the save path.
         configRNN.savePath = os.path.join(configRNN.savePath, 'RNN-I')
         RNN = gaussRNN(configRNN)
-        RNN.full_train(dataset=Dataset, maxEpoch=50, batchSize= 125, earlyStop=300, learning_rate=0.001,
+        RNN.full_train(dataset=Dataset, maxEpoch=300, batchSize= 125, earlyStop=10, learning_rate=0.001,
                        valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':
