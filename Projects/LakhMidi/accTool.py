@@ -24,18 +24,25 @@ Function: accRNN - compute the average accuracy of piano-rolls for RNN
 input: RNN - the well-trained RNN model.
        testSet - the test set.
        batches_idx - the batches.
+       Sample - the number of samples.
 output: ACC - the average accuracy per frame over the test set.
 #########################################################################"""
-def accRNN(RNN, testSet, batchSize):
+def accRNN(RNN, testSet, batchSize, Sample=50):
     ACC = []
     batches = get_batches_idx(len(testSet), batchSize)
     for Idx in batches:
         x = testSet[Idx.tolist()]           # get the batch of input sequence.
         prob = RNN.output_function(x)       # compute the probability of x. [batch, length, frame]
-        TP = np.asarray((x == 1) & (prob >= 0.5), 'float32').sum(axis=-1)
-        FP = np.asarray((x == 0) & (prob >= 0.5), 'float32').sum(axis=-1)
-        FN = np.asarray((x == 1) & (prob < 0.5), 'float32').sum(axis=-1)
-        acc = TP / (FN + FP + TP + 1e-8)
+        acc = []
+        for i in range(Sample):
+            sample = np.random.binomial(1, prob)
+            TP = np.asarray((x == 1) & (sample == 1), 'float32').sum(axis=-1)
+            FP = np.asarray((x == 0) & (sample == 1), 'float32').sum(axis=-1)
+            FN = np.asarray((x == 1) & (sample == 0), 'float32').sum(axis=-1)
+            temp = TP / (FN + FP + TP + 1e-8)
+            acc.append(temp.mean())
+        acc = np.asarray(acc)
         ACC.append(acc.mean()*x.shape[0])
+    #
     ACC = np.asarray(ACC).sum() / len(testSet)
     return ACC

@@ -37,7 +37,7 @@ if __name__ == '__main__':
                           valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':
-        configRNN.loadPath =  os.path.join(configRNN.savePath, 'RNN-I')
+        configRNN.loadPath = os.path.join(configRNN.savePath, 'RNN-I')
         Dataset = fetchData()
         RNN = binRNN(configRNN)
         print('Evaluation: start computing the accuracy metric.')

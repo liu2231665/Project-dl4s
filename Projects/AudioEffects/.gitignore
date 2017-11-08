@@ -102,4 +102,8 @@ ENV/
 
 #ignore the cache folder for Pycharm.
 dataset/
-blizzardRNN/
+audioRNN/
+audioRNN/RNN-I.data-00000-of-00001
+audioRNN/RNN-I.index
+audioRNN/RNN-I.meta
+audioRNN-II/

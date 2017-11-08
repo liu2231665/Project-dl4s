@@ -452,11 +452,10 @@ class gaussRNN_cov(_arRNN, object):
                 mu = tf.tensordot(self._hiddenOutput, W_mu, [[-1], [0]]) + b_mu
                 diag_sig = tf.nn.softplus(tf.tensordot(self._hiddenOutput, W_sig,
                                             [[-1], [0]]) + b_sig) + 1e-8     # [batchSize, Time, frameSize]
-                tile_diag = tf.tile(diag_sig, [1, 1, Config.dimLayer[-1]])
-                Shape = tf.shape(tile_diag)
-                tile_diag = tf.reshape(tile_diag, [Shape[0], Shape[1], Config.dimLayer[-1], Config.dimLayer[-1]])
+                tile_diag = tf.matrix_diag(diag_sig)
                 # [batchSize, Time, frameSize, frameSize]
-                sqrtSig = tile_diag * U_sig + 1e-8
+                sqrtSig = tf.tensordot(tile_diag, U_sig, [[-1], [-2]]) + 1e-8
+                sqrtSig = tf.transpose(sqrtSig, perm=[0, 1, 3, 2])
                 self._outputs = [mu, sqrtSig]
                 # Todo: the log-likelihood is infinite.
                 # define the loss function as negative log-likelihood.

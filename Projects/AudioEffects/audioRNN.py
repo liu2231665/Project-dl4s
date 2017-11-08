@@ -1,4 +1,3 @@
-#TODO:
 """#########################################################################
 Author: Yingru Liu
 Institute: Stony Brook University
@@ -7,7 +6,8 @@ Descriptions: the code to train and run the gaussRNN from dl4s.autoregRNN
               ----2017.11.03
 #########################################################################"""
 from dl4s import gaussRNN, configRNN
-from fetchData import fetchData
+from Projects.AudioEffects.fetchData import fetchData
+from Projects.AudioEffects.rmseTool import rmseRNN
 import os
 import h5py
 
@@ -19,7 +19,7 @@ configRNN.dimLayer = [150, 500, 150]
 configRNN.init_scale = 0.01
 SAVETO = './audioRNN/historyRNN.npz'
 
-Flag = 'training'                       # {'training'/'evaluation'}
+Flag = 'evaluation'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
     Dataset = fetchData()
@@ -38,4 +38,8 @@ if __name__ == '__main__':
                        valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':
-        pass
+        configRNN.loadPath = os.path.join(configRNN.savePath, 'RNN-I')
+        RNN = gaussRNN(configRNN)
+        print('Evaluation: start computing the RMSE metric.')
+        RMSE = rmseRNN(RNN, Dataset['test'], batchSize=125)
+        print('The testing reconstructed error is \x1b[1;91m%10.4f\x1b[0m.' % RMSE)
