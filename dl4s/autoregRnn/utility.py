@@ -61,39 +61,3 @@ def hidden_net(
         #output: [batch_size, max_time, cell.output_size]
         outputs, _ = tf.nn.dynamic_rnn(cells, x, initial_state=state)
     return cells, outputs, initializer
-
-"""#########################################################################
-GaussNLL: function to compute the negative log-likelihood of Gaussian 
-          distribution with a diagonal covariance matrix.
-input: x - network input indicated by <tensor placeholder>. 
-       mean - mean of the Gaussian distribution computed by the graph.
-       sigma - variance of the Gaussian distribution computed by the graph.
-output: nll - a tensor representing the NLL per bit.
-#########################################################################"""
-def GaussNLL(x, mean, sigma):
-    nll = 0.5*tf.reduce_mean(tf.div(tf.square(x-mean), sigma) + tf.log(sigma)) + 0.5*tf.log(2*np.pi)
-    return nll
-
-"""#########################################################################
-CovGaussNLL: function to compute the negative log-likelihood of Gaussian 
-          distribution with a non-diagonal covariance matrix.
-input: x - network input indicated by <tensor placeholder>. 
-       mean - mean of the Gaussian distribution computed by the graph.
-              [batchSize, Time, frameSize]
-       sqrtSig - square root of covariance matrix of the Gaussian distribution 
-                 computed by the graph. [batchSize, Time, frameSize, frameSize]
-output: nll - a tensor representing the NLL per bit.
-#########################################################################"""
-def CovGaussNLL(x, mean, sqrtSig):
-    sigma = tf.matmul(sqrtSig, sqrtSig)
-    term1 = tf.log(tf.matrix_determinant(sigma + 1e-8) + 1e-8)
-    X_m = x - mean
-    Shape = tf.shape(mean)
-    reshapeX_m1 = tf.reshape(X_m, (Shape[0], Shape[1], 1, Shape[2]))
-    reshapeX_m2 = tf.reshape(X_m, (Shape[0], Shape[1], Shape[2], 1))
-    term2 = tf.matmul(tf.matmul(reshapeX_m1, tf.matrix_inverse(sigma + 1e-8)), reshapeX_m2)
-
-    term1 = tf.reduce_mean(term1)
-    term2 = tf.reduce_mean(term2)
-    nll = 0.5 * (term1 + term2) / tf.cast(Shape[2], tf.float32) + 0.5*tf.log(2*np.pi)
-    return nll

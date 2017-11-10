@@ -7,8 +7,8 @@ Descriptions: This file contains the Autoregressive RNN with arbitrary
 #########################################################################"""
 
 import tensorflow as tf
-from .utility import hidden_net, GaussNLL, CovGaussNLL
-from dl4s.tools import get_batches_idx
+from .utility import hidden_net
+from dl4s.tools import get_batches_idx, GaussNLL
 import numpy as np
 import time
 
@@ -353,7 +353,6 @@ class binRNN(_arRNN, object):
             samples = tf.concat(samples, 0)
         return self._sess.run(samples).T
 
-
 """#########################################################################
 Class: gaussRNN - the auto-regressive Recurrent Neural Network for stochastic
                 binary inputs.
@@ -425,92 +424,5 @@ class gaussRNN(_arRNN, object):
 """
 --------------------------------------------------------------------------------------------
 """
-class gaussRNN_cov(_arRNN, object):
-    """
-        __init__: the initialization function.
-        input: Config - configuration class in ./ utility.
-        output: None.
-        """
-
-    def __init__(
-            self,
-            Config,
-    ):
-        _arRNN.__init__(self, Config)
-        # revise the output layer of the gaussRNN.
-        with self._graph.as_default():
-            with tf.variable_scope('logit', initializer=self._initializer):
-                # define the Gaussian output layer with diagonal layer.
-                W_mu = tf.get_variable('weight_mu', shape=(Config.dimLayer[-2], Config.dimLayer[-1]))
-                b_mu = tf.get_variable('bias_mu', shape=Config.dimLayer[-1], initializer=tf.zeros_initializer)
-                W_sig = tf.get_variable('weight_sig', shape=(Config.dimLayer[-2], Config.dimLayer[-1]))
-                b_sig = tf.get_variable('bias_sig', shape=Config.dimLayer[-1], initializer=tf.zeros_initializer)
-                U_sig = tf.get_variable('matrix_sig', shape=(Config.dimLayer[-1], Config.dimLayer[-1]))
-                # mu - the mean of the conditional Gaussian distribution.
-                # sig -  the variance of the conditional Gaussian distribution.
-                #        (positive definiteness is assured by softplus function.)
-                mu = tf.tensordot(self._hiddenOutput, W_mu, [[-1], [0]]) + b_mu
-                diag_sig = tf.nn.softplus(tf.tensordot(self._hiddenOutput, W_sig,
-                                            [[-1], [0]]) + b_sig) + 1e-8     # [batchSize, Time, frameSize]
-                tile_diag = tf.matrix_diag(diag_sig)
-                # [batchSize, Time, frameSize, frameSize]
-                sqrtSig = tf.tensordot(tile_diag, U_sig, [[-1], [-2]]) + 1e-8
-                sqrtSig = tf.transpose(sqrtSig, perm=[0, 1, 3, 2])
-                self._outputs = [mu, sqrtSig]
-                # Todo: the log-likelihood is infinite.
-                # define the loss function as negative log-likelihood.
-                self._loss = CovGaussNLL(x=self.x[:, 1:, :], mean=mu[:, 0:-1, :],
-                                         sqrtSig=sqrtSig[:, 0:-1, :, :])
-                self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-                self._train_step = self._optimizer.minimize(tf.cast(tf.shape(self.x), tf.float32)[-1] * self._loss)
-                self._runSession()
-                L = tf.norm(U_sig, axis=0)
-                x, l = self._sess.run([U_sig, L])
-                self._sess.run(U_sig.assign(x / l))
-
-    """#########################################################################
-    output_function: reconstruction of the output_function in class: arRNN.
-    #########################################################################"""
-    def output_function(self, input):
-        with self._graph.as_default():
-            zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
-            con_input = np.concatenate((zero_padd, input), axis=1)
-            output = self._sess.run(self._outputs, feed_dict={self.x: con_input})
-        return output[0][:, 0:-1, :], output[1][:, 0:-1, :]
-
-    """#########################################################################
-    train_function: : reconstruction of the train_function in class: arRNN.
-    #########################################################################"""
-    def train_function(self, input, lrate):
-        with self._graph.as_default():
-            zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
-            con_input = np.concatenate((zero_padd, input), axis=1)
-            _, loss_value = self._sess.run([self._train_step, self._loss],
-                                           feed_dict={self.x: con_input, self.lr: lrate})
-            # normalize the U_sig by length to stable the training.
-            with tf.variable_scope('logit', reuse=True):
-                U_sig = tf.get_variable('matrix_sig')
-                L = tf.norm(U_sig, axis=0)
-                x, l = self._sess.run([U_sig, L])
-                self._sess.run(U_sig.assign(x / l))
-        return loss_value * input.shape[-1]
-
-    # TODO:
-    """#########################################################################
-    gen_function: reconstruction of the gen_function in class: arRNN.
-    #########################################################################"""
-    def gen_function(self, numSteps):
-        pass
-
-
-"""
---------------------------------------------------------------------------------------------
-"""
 class gmmRNN(_arRNN):
-    pass
-
-"""
---------------------------------------------------------------------------------------------
-"""
-class gmmRNN_cov(_arRNN):
     pass

@@ -1,1 +1,2 @@
-from dl4s.autoregRnn.utility import hidden_net
+from dl4s.SeqVAE.utility import configSTORN
+from dl4s.tools import GaussKL, GaussNLL, BernoulliNLL
