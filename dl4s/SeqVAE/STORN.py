@@ -85,13 +85,45 @@ class _STORN(object):
             # <Tensorflow Session>.
             self._sess = tf.Session(graph=self._graph)
 
-    # TODO: define the other functions.
     """#########################################################################
-    __init__:the initialization function.
-    input: Config - configuration class in ./utility.
+    _runSession: initialize the graph or restore from the load path.
+    input: None.
     output: None.
     #########################################################################"""
+    def _runSession(self):
+        if self._loadPath is None:
+            self._sess.run(tf.global_variables_initializer())
+        else:
+            saver = tf.train.Saver()
+            saver.restore(self._sess, self._loadPath)
+        return
 
+
+    # TODO: define the other functions.
+    """#########################################################################
+    train_function: compute the loss and update the tensor variables.
+    input: input - numerical input.
+           lrate - <scalar> learning rate.
+    output: the loss value.
+    #########################################################################"""
+
+    """#########################################################################
+    val_function: compute the loss with given input.
+    input: input - numerical input.
+    output: the loss value.
+    #########################################################################"""
+
+    """#########################################################################
+    output_function: compute the output with given input.
+    input: input - numerical input.
+    output: the output values of the network.
+    #########################################################################"""
+
+    """#########################################################################
+    gen_function: generate samples.
+    input: numSteps - the length of the sample sequence.
+    output: should be the sample.
+    #########################################################################"""
 
 
 
