@@ -11,13 +11,14 @@ import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
     X = dict()
-    X = np.random.normal(0, 1.0, size=(100, 25, 200))
+    X = np.random.binomial(1, 0.5, size=(100, 250, 200))
     Config = configSTORN()
-    Config.Opt = 'Momentum'
-    Config.dimGen = [200, 500, 300]
-    Config.dimReg = [200, 500, 300]
+    Config.Opt = 'SGD'
+    Config.dimGen = [500]
+    Config.dimReg = [500]
     Config.dimInput = 200
-    Config.init_scale = 0.1
+    Config.dimState = 500
+    Config.init_scale = 0.01
     Config.eventPath = './RNN/'
     Config.savePath = './RNN/my-model'
 
@@ -26,3 +27,5 @@ if __name__ == '__main__':
     """
     RNN = binSTORN(Config)
     # test the training function
+    for i in range(100):
+        print("The training loss is %f." % RNN.train_function(input=X, lrate=0.1))

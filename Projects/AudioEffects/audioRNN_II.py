@@ -19,7 +19,7 @@ configRNN.dimLayer = [150, 500, 500, 150]
 configRNN.init_scale = 0.01
 SAVETO = './audioRNN-II/historyRNN.npz'
 
-Flag = 'training'                       # {'training'/'evaluation'}
+Flag = 'evaluation'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
     Dataset = fetchData()
@@ -38,7 +38,7 @@ if __name__ == '__main__':
                        valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':
-        configRNN.loadPath = os.path.join(configRNN.savePath, 'RNN-I')
+        configRNN.loadPath = os.path.join(configRNN.savePath, 'RNN-II')
         RNN = gaussRNN(configRNN)
         print('Evaluation: start computing the RMSE metric.')
         RMSE = rmseRNN(RNN, Dataset['test'], batchSize=125)

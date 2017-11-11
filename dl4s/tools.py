@@ -72,4 +72,4 @@ output: kl - a tensor representing the KL divergence per bit.
 def GaussKL(meanP, sigmaP, meanQ, sigmaQ):
     term1 = tf.log(tf.sqrt(sigmaQ) + 1e-8) - tf.log(tf.sqrt(sigmaP) + 1e-8)
     term2 = tf.div(sigmaP + (meanP - meanQ)**2, 2*sigmaQ)
-    return tf.reduce_mean(term1 + term2 - 0.5)
+    return tf.reduce_mean(term1 + term2) - 0.5
