@@ -33,10 +33,11 @@ def buildHidden(
     cells = tf.contrib.rnn.MultiRNNCell(layers, state_is_tuple=True)
     return cells
 
-"""#########################################################################
-Descriptions: Tools of the STORN.
-              ----2017.11.03
-#########################################################################"""
+#####################################################
+# Descriptions: Tools of the STORN.                 #
+#             ----2017.11.11                        #
+#####################################################
+
 """#########################################################################
 Class: configSTORN - Basic configuration of the STORN models. 
        For the model details, please refer to:
@@ -210,3 +211,43 @@ def buildSTORN(
         hiddenGen_t, _ = tf.nn.dynamic_rnn(halfCell, x, initial_state=state)
     return muZ[:, 0:-1, :], sigZ[:, 0:-1, :], hg_t[:, 0:-1, :], hiddenGen_t[:, 0:-1, :], \
            allCell, halfCell
+
+#####################################################
+# Descriptions: Tools of the VRNN.                  #
+#             ----2017.11.13                        #
+#####################################################
+"""#########################################################################
+Class: configVRNN - Basic configuration of the VRNN models. 
+       For the model details, please refer to:
+       "A Recurrent Latent Variable Model for Sequential Data" - arxiv.
+        https://arxiv.org/abs/1506.02216 
+#########################################################################"""
+class configVRNN(object):
+    """
+    Elements outside the __init__ method are static elements.
+    Elements inside the __init__ method are elements of the object.
+    ----from Stackoverflow(https://stackoverflow.com/questions/9056957/correct-way-to-define-class-variables-in-python).
+    """
+    unitType = 'LSTM'           # <string> the type of hidden units(LSTM/GRU/Tanh).
+    dimRec = []                 # <scalar list> the size of recurrent hidden layers.
+    dimFor = []                 # <scalar list> the size of feedforward hidden layers.
+    dimInput = 100              # <scalar> the size of frame of the input.
+    dimState = 100              # <scalar> the size of the stochastic layer.
+    init_scale = 0.1            # <scalar> the initialized scales of the weight.
+    float = 'float32'           # <string> the type of float.
+    Opt = 'SGD'                 # <string> the optimization method.
+    savePath = None             # <string/None> the path to save the model.
+    eventPath = None            # <string/None> the path to save the events for visualization.
+    loadPath = None             # <string/None> the path to load the model.
+
+"""#########################################################################
+Class: varCell - the variational cell of the VRNN models. 
+#########################################################################"""
+class varCell(tf.contrib.rnn.RNNCell):
+    pass
+
+"""#########################################################################
+Class: halfVarCell - the variational cell of the decoder model. 
+#########################################################################"""
+class halfVarCell(tf.contrib.rnn.RNNCell):
+    pass

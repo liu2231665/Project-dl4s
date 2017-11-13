@@ -183,6 +183,8 @@ class _arRNN(object):
     output: None
     #########################################################################"""
     def saveEvent(self):
+        if self._eventPath is None:
+            raise ValueError("Please privide the path to save the events by self._eventPath!!")
         with self._graph.as_default():
             # compute the statistics of the parameters.
             for param in self._params:

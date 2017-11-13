@@ -26,7 +26,7 @@ if __name__ == '__main__':
     # test the training function
     for i in range(10):
         print("The training loss is %f." % RNN.train_function(input=X, lrate=0.1))
-    # test the saving and restoring
+    # test the generating sample.
     print("The valid loss is %f." % RNN.val_function(input=X))
     samples = RNN.gen_function(numSteps=40)
     imgplot = plt.imshow(samples, cmap='binary')

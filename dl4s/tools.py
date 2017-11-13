@@ -46,7 +46,7 @@ output: nll - a tensor representing the NLL per bit.
 #########################################################################"""
 def BernoulliNLL(x, P):
     nll = x * tf.log(P+1e-8) + (1 - x) * tf.log(1-P+1e-8)
-    return tf.reduce_mean(nll)
+    return -tf.reduce_mean(nll)
 
 """#########################################################################
 GaussNLL: function to compute the negative log-likelihood of Gaussian 
@@ -70,6 +70,6 @@ input: meanP - mean of the Gaussian distribution "P"
 output: kl - a tensor representing the KL divergence per bit.
 #########################################################################"""
 def GaussKL(meanP, sigmaP, meanQ, sigmaQ):
-    term1 = tf.log(tf.sqrt(sigmaQ) + 1e-8) - tf.log(tf.sqrt(sigmaP) + 1e-8)
-    term2 = tf.div(sigmaP + (meanP - meanQ)**2, 2*sigmaQ)
-    return tf.reduce_mean(term1 + term2) - 0.5
+    term1 = tf.log(sigmaQ + 1e-8) - tf.log(sigmaP + 1e-8)
+    term2 = tf.div(sigmaP + (meanP - meanQ)**2, sigmaQ + 1e-8)
+    return 0.5 * tf.reduce_mean(term1 + term2) - 0.5
