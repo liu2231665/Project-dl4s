@@ -328,8 +328,9 @@ class binSTORN(_STORN, object):
     ):
         super().__init__(configSTORN)
         with self._graph.as_default():
-            W = tf.get_variable('W', shape=(configSTORN.dimGen[-1], configSTORN.dimInput))
-            b = tf.get_variable('b', shape=configSTORN.dimInput, initializer=tf.zeros_initializer)
+            with tf.variable_scope('logit'):
+                W = tf.get_variable('W', shape=(configSTORN.dimGen[-1], configSTORN.dimInput))
+                b = tf.get_variable('b', shape=configSTORN.dimInput, initializer=tf.zeros_initializer)
             # compute the generating outputs.
             self._allgenOut = tf.nn.sigmoid(tf.tensordot(self._hg_t, W, [[-1], [0]]) + b)
             self._halfgenOut = tf.nn.sigmoid(tf.tensordot(self._half_hg_t, W, [[-1], [0]]) + b)
@@ -344,10 +345,20 @@ class binSTORN(_STORN, object):
     output: should be the sample.
     #########################################################################"""
     def gen_function(self,  numSteps):
-        X = np.zeros((1, numSteps+1, self._dimInput))
-        prob = self._sess.run(self._halfgenOut, feed_dict={self.x: X})
-        sample = np.random.binomial(1, prob[0, 0:-1, :])
-        return sample
+        with self._graph.as_default():
+            state = self._halfCell.zero_state(1, dtype=tf.float32)
+            x_ = tf.zeros((1, self._dimInput), dtype='float32')
+            samples = []
+            with tf.variable_scope('logit', reuse=True):
+                W = tf.get_variable('W')
+                b = tf.get_variable('b')
+                for i in range(numSteps):
+                    hidde_, state = self._halfCell(x_, state)
+                    probs = tf.nn.sigmoid(tf.nn.xw_plus_b(hidde_, W, b))
+                    x_ = tf.distributions.Bernoulli(probs=probs, dtype=tf.float32).sample()
+                    samples.append(x_)
+            samples = tf.concat(samples, 0)
+        return self._sess.run(samples)
 
 
 """#########################################################################
@@ -366,21 +377,22 @@ class gaussSTORN(_STORN, object):
     ):
         super().__init__(configSTORN)
         with self._graph.as_default():
-            Wg_mu = tf.get_variable('Wg_mu', shape=(configSTORN.dimGen[-1], configSTORN.dimInput))
-            bg_mu = tf.get_variable('bg_mu', shape=configSTORN.dimInput, initializer=tf.zeros_initializer)
-            Wg_sig = tf.get_variable('Wg_sig', shape=(configSTORN.dimGen[-1], configSTORN.dimInput))
-            bg_sig = tf.get_variable('bg_sig', shape=configSTORN.dimInput, initializer=tf.zeros_initializer)
+            with tf.variable_scope('output'):
+                Wg_mu = tf.get_variable('Wg_mu', shape=(configSTORN.dimGen[-1], configSTORN.dimInput))
+                bg_mu = tf.get_variable('bg_mu', shape=configSTORN.dimInput, initializer=tf.zeros_initializer)
+                Wg_sig = tf.get_variable('Wg_sig', shape=(configSTORN.dimGen[-1], configSTORN.dimInput))
+                bg_sig = tf.get_variable('bg_sig', shape=configSTORN.dimInput, initializer=tf.zeros_initializer)
             # compute the generating outputs.
             meanAll = tf.tensordot(self._hg_t, Wg_mu, [[-1], [0]]) + bg_mu
-            sigALL = tf.nn.softplus(tf.nn.xw_plus_b(self._hg_t, Wg_sig, bg_sig)) + 1e-8
+            sigALL = tf.nn.softplus(tf.tensordot(self._hg_t, Wg_sig, [[-1], [0]]) + bg_sig) + 1e-8
             self._allgenOut = [meanAll, sigALL]
             #
             meanHalf = tf.tensordot(self._half_hg_t, Wg_mu, [[-1], [0]]) + bg_mu
-            sigHalf = tf.nn.softplus(tf.nn.xw_plus_b(self._half_hg_t, Wg_sig, bg_sig)) + 1e-8
+            sigHalf = tf.nn.softplus(tf.tensordot(self._half_hg_t, Wg_sig, [[-1], [0]]) + bg_sig) + 1e-8
             self._halfgenOut = [meanHalf, sigHalf]
             #
             # Compute the gaussian negative ll.
-            self._loss += GaussNLL(self.x[:, 1:, :], self._allgenOut[0][:, 0:-1, :], self._allgenOut[1][:, 0:-1, :])
+            self._loss += GaussNLL(self.x[:, 1:, :], self._allgenOut[0], self._allgenOut[1]**2)
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(tf.cast(tf.shape(self.x), tf.float32)[-1] * self._loss)
             self._runSession()
@@ -391,7 +403,20 @@ class gaussSTORN(_STORN, object):
     output: should be the sample.
     #########################################################################"""
     def gen_function(self, numSteps):
-        X = np.zeros((1, numSteps + 1, self._dimInput))
-        mean, var = self._sess.run(self._halfgenOut, feed_dict={self.x: X})
-        samples = tf.distributions.Normal(loc=mean[0, 0:-1, :], scale=tf.sqrt(var[0, 0:-1, :])).sample()
+        with self._graph.as_default():
+            state = self._halfCell.zero_state(1, dtype=tf.float32)
+            x_ = tf.zeros((1, self._dimInput), dtype='float32')
+            samples = []
+            with tf.variable_scope('output', reuse=True):
+                Wg_mu = tf.get_variable('Wg_mu')
+                bg_mu = tf.get_variable('bg_mu')
+                Wg_sig = tf.get_variable('Wg_sig')
+                bg_sig = tf.get_variable('bg_sig')
+                for i in range(numSteps):
+                    hidde_, state = self._halfCell(x_, state)
+                    mu = tf.nn.xw_plus_b(hidde_, Wg_mu, bg_mu)
+                    sig = tf.nn.softplus(tf.nn.xw_plus_b(hidde_, Wg_sig, bg_sig)) + 1e-8
+                    x_ = tf.distributions.Normal(loc=mu, scale=tf.sqrt(sig)).sample()
+                    samples.append(x_)
+            samples = tf.concat(samples, 0)
         return self._sess.run(samples)

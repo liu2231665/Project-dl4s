@@ -14,10 +14,10 @@ if __name__ == '__main__':
     X = np.random.binomial(1, 0.5, size=(100, 250, 200))
     Config = configSTORN()
     Config.Opt = 'SGD'
-    Config.dimGen = [500]
-    Config.dimReg = [500]
+    Config.dimGen = [200]
+    Config.dimReg = [200]
     Config.dimInput = 200
-    Config.dimState = 500
+    Config.dimState = 200
     Config.init_scale = 0.01
     Config.eventPath = './STORN/'
     Config.savePath = './STORN/my-model'
@@ -26,7 +26,7 @@ if __name__ == '__main__':
     test training and model operation.
     """
     STORN = binSTORN(Config)
-    for i in range(100):
+    for i in range(5):
         print("The training ELBO is %f." % STORN.train_function(input=X, lrate=0.1))
 
     """

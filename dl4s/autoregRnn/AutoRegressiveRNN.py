@@ -353,7 +353,7 @@ class binRNN(_arRNN, object):
                     x_ = tf.distributions.Bernoulli(probs=probs, dtype=tf.float32).sample()
                     samples.append(x_)
             samples = tf.concat(samples, 0)
-        return self._sess.run(samples).T
+        return self._sess.run(samples)
 
 """#########################################################################
 Class: gaussRNN - the auto-regressive Recurrent Neural Network for stochastic
@@ -421,7 +421,7 @@ class gaussRNN(_arRNN, object):
                     x_ = tf.distributions.Normal(loc=mu, scale=tf.sqrt(sig)).sample()
                     samples.append(x_)
             samples = tf.concat(samples, 0)
-        return self._sess.run(samples).T
+        return self._sess.run(samples)
 
 """
 --------------------------------------------------------------------------------------------
