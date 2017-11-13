@@ -416,7 +416,7 @@ class gaussSTORN(_STORN, object):
                     hidde_, state = self._halfCell(x_, state)
                     mu = tf.nn.xw_plus_b(hidde_, Wg_mu, bg_mu)
                     sig = tf.nn.softplus(tf.nn.xw_plus_b(hidde_, Wg_sig, bg_sig)) + 1e-8
-                    x_ = tf.distributions.Normal(loc=mu, scale=tf.sqrt(sig)).sample()
+                    x_ = tf.distributions.Normal(loc=mu, scale=sig).sample()
                     samples.append(x_)
             samples = tf.concat(samples, 0)
         return self._sess.run(samples)
