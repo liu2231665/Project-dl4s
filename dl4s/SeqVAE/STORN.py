@@ -58,7 +58,7 @@ class _STORN(object):
 
             # build the structure.
             # self._muZ - the mean value of conditional Gaussian P(Z|X)         ###
-            # self._sigZ - the variance value of conditional Gaussian P(Z|X)    ###
+            # self._sigZ - the std value of conditional Gaussian P(Z|X)    ###
             # self._hg_t - the hidden output of  value of the generating model, ###
             #              with Zt sampled from P(Z|X)                          ###
             # self._hiddenGen_t - the hidden output of  value of the generating ###
@@ -68,7 +68,7 @@ class _STORN(object):
             self._muZ, self._sigZ, self._hg_t, self._half_hg_t, self._allCell, self._halfCell \
                 = buildSTORN(self.x, self._graph, configSTORN)
             # <pass> will be define in the children classes.
-            self._loss = GaussKL(self._muZ, self._sigZ, 0.0, 1.0)
+            self._loss = GaussKL(self._muZ, self._sigZ**2, 0.0, 1.0)
             # <pass> will be define in the children classes.
             self._train_step = None
             # <pass> the output of the recognition model.

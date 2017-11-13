@@ -154,7 +154,7 @@ class stornCell(tf.contrib.rnn.RNNCell):
             with tf.variable_scope('generateModel'):
                 hg_t, stateGen = self.hiddenGen(tf.concat(axis=1, values=(x, Z_t)), state[len(self._dimReg):])      # generating hidden output batch, frame)
 
-            return (muZ, sigZ**2, hg_t), stateReg + stateGen
+            return (muZ, sigZ, hg_t), stateReg + stateGen
 
     """
     zero_state: generate the zero initial state of the cells.
@@ -354,6 +354,10 @@ class varCell(tf.contrib.rnn.RNNCell):
         # Compute the decoder.
         with tf.variable_scope('decoder', initializer=initializer):
             zz = self._mlpz(z)
+            hidden_dec = self._mlpDec(tf.concat(axis=1, values=(zz, state)))
+        # Unpdate the state.
+        newState = self._rnn(tf.concat(axis=1, values=(xx, zz)), state)
+        return (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec), newState
 
 
 """#########################################################################
