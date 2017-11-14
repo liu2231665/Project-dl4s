@@ -53,7 +53,7 @@ class MLP(object):
         initializer = tf.random_uniform_initializer(-self._init_scale, self._init_scale)
         for l in range(len(self._dimFor)):
             with tf.variable_scope("MLP-"+str(l), initializer=initializer):
-                W = tf.get_variable('W', shape=(tf.shape(xx)[-1], self._dimFor[l]))
+                W = tf.get_variable('W', shape=(xx.shape[-1], self._dimFor[l]))
                 b = tf.get_variable('b', shape=self._dimFor[l], initializer=tf.zeros_initializer)
                 logit = tf.tensordot(xx, W, [[-1], [0]]) + b
                 if self._unitType == 'relu':
@@ -65,6 +65,7 @@ class MLP(object):
                 else:
                     raise ValueError("The unitType should be either relu, tanh or sigmoid!!")
         return xx
+
 
 
 """###############################################STORN####################################################"""
@@ -315,8 +316,15 @@ class varCell(tf.contrib.rnn.RNNCell):
 
     @property
     def output_size(self):
-        # shape of mu, sig and generating hidden output.
-        return
+        temp = 0
+        if len(self._dimMLPdec) != 0:
+            temp = self._mlpDec[-1]
+        else:
+            temp = self._dimRec[-1]
+            if len(self._dimMLPx) != 0:
+                temp += self._dimMLPx[-1]
+        return (self._dimState, self._dimState, self._dimState, self._dimState,
+                temp, self._dimRec[-1])
 
     """
     __call__:
@@ -326,6 +334,10 @@ class varCell(tf.contrib.rnn.RNNCell):
     output: 
     """
     def __call__(self, x, state, scope=None):
+        if self._recType == 'LSTM':
+            h_tm1 = state[-1][1]
+        else:
+            h_tm1 = state[-1]
         # Compute the prior.
         initializer = tf.random_uniform_initializer(-self._init_scale, self._init_scale)
         with tf.variable_scope('prior', initializer=initializer):
@@ -334,15 +346,15 @@ class varCell(tf.contrib.rnn.RNNCell):
             Wp_sig = tf.get_variable('Wp_sig', shape=(self._dimRec[-1], self._dimState))
             bp_sig = tf.get_variable('bp_sig', shape=self._dimState, initializer=tf.zeros_initializer)
             # compute the mean and variance of P(Z) based on h_{t-1}
-            prior_mu = tf.matmul(state[-1], Wp_mu) + bp_mu
-            prior_sig = tf.nn.softplus(tf.matmul(state[-1], Wp_sig) + bp_sig) + 1e-8
+            prior_mu = tf.matmul(h_tm1, Wp_mu) + bp_mu
+            prior_sig = tf.nn.softplus(tf.matmul(h_tm1, Wp_sig) + bp_sig) + 1e-8
         # Compute the encoder.
         with tf.variable_scope('encoder', initializer=initializer):
             xx = self._mlpx(x)
-            hidden_enc = self._mlpEnc(tf.concat(axis=1, values=(xx, state)))
-            Wenc_mu = tf.get_variable('Wenc_mu', shape=(self._dimMLPenc[-1], self._dimState))
+            hidden_enc = self._mlpEnc(tf.concat(axis=1, values=(xx, h_tm1)))
+            Wenc_mu = tf.get_variable('Wenc_mu', shape=(hidden_enc.shape[-1], self._dimState))
             benc_mu = tf.get_variable('benc_mu', shape=self._dimState, initializer=tf.zeros_initializer)
-            Wenc_sig = tf.get_variable('Wenc_sig', shape=(self._dimMLPenc[-1], self._dimState))
+            Wenc_sig = tf.get_variable('Wenc_sig', shape=(hidden_enc.shape[-1], self._dimState))
             benc_sig = tf.get_variable('benc_sig', shape=self._dimState, initializer=tf.zeros_initializer)
             # compute the mean and variance of the posterior P(Z|X).
             pos_mu = tf.matmul(hidden_enc, Wenc_mu) + benc_mu
@@ -354,10 +366,20 @@ class varCell(tf.contrib.rnn.RNNCell):
         # Compute the decoder.
         with tf.variable_scope('decoder', initializer=initializer):
             zz = self._mlpz(z)
-            hidden_dec = self._mlpDec(tf.concat(axis=1, values=(zz, state)))
+            hidden_dec = self._mlpDec(tf.concat(axis=1, values=(zz, h_tm1)))
         # Unpdate the state.
-        newState = self._rnn(tf.concat(axis=1, values=(xx, zz)), state)
-        return (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec), newState
+        _, newState = self._rnn(tf.concat(axis=1, values=(xx, zz)), state)
+        return (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1), newState
+
+    """
+    zero_state: generate the zero initial state of the cells.
+    input: batch_size - the batch size of data chunk.
+           dtype - the data type.
+    output: state0 + state1 - the initial zero states.
+    """
+    def zero_state(self, batch_size, dtype):
+        state0 = self._rnn.zero_state(batch_size, dtype)
+        return state0
 
 
 """#########################################################################
@@ -377,5 +399,10 @@ def buildVRNN(
         graph,
         Config=configVRNN(),
 ):
-    cell = varCell(Config)
-    pass
+    with graph.as_default():
+        # define the variational cell of VRNN
+        allCell = varCell(Config)
+
+        # run the whole model.
+        state = allCell.zero_state(tf.shape(x)[0], dtype=tf.float32)
+        (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1), _ = tf.nn.dynamic_rnn(allCell, x, initial_state=state)
