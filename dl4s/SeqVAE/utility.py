@@ -411,13 +411,6 @@ class varCell(tf.contrib.rnn.RNNCell):
         state0 = self._rnn.zero_state(batch_size, dtype)
         return state0
 
-
-"""#########################################################################
-Class: halfVarCell - the variational cell of the decoder model. 
-#########################################################################"""
-class halfVarCell(tf.contrib.rnn.RNNCell):
-    pass
-
 """#########################################################################
 Function: buildVRNN - build the whole graph of VRNN. 
 input: x - a placeholder that indicates the input data. [batch, step, frame]
@@ -436,4 +429,4 @@ def buildVRNN(
         # run the whole model.
         state = allCell.zero_state(tf.shape(x)[0], dtype=tf.float32)
         (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1), _ = tf.nn.dynamic_rnn(allCell, x, initial_state=state)
-        return prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1
+        return prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1, allCell

@@ -14,11 +14,11 @@ if __name__ == '__main__':
     X = np.random.binomial(1, 0.5, size=(100, 250, 200))
     Config = configVRNN()
     Config.Opt = 'SGD'
-    Config.dimRec = [200]
-    Config.dimForX = [100]
-    Config.dimForZ = [100]
+    Config.dimRec = [400]
+    Config.dimForX = [400]
+    Config.dimForZ = [400]
     Config.dimInput = 200
-    Config.dimState = 200
+    Config.dimState = 400
     Config.init_scale = 0.01
     Config.eventPath = './VRNN/'
     Config.savePath = './VRNN/my-model'
@@ -27,4 +27,5 @@ if __name__ == '__main__':
     test training and model operation.
     """
     VRNN = binVRNN(Config)
-    pass
+    for i in range(50):
+        print("The training ELBO is %f." % VRNN.train_function(input=X, lrate=0.05))
