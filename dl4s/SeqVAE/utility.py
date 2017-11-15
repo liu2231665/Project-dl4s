@@ -289,8 +289,9 @@ class varCell(tf.contrib.rnn.RNNCell):
     input: configVRNN - configuration class in ./utility.
     output: None.
     """
-    def __init__(self, config=configVRNN):
+    def __init__(self, config=configVRNN, train=True):
         self._dimState = config.dimState            # the dimension of stochastic layer
+        self._dimInput = config.dimInput
         self._dimRec = config.dimRec                # the dimension of recurrent layers.
         self._dimMLPx = config.dimForX
         self._dimMLPz = config.dimForZ
@@ -309,22 +310,55 @@ class varCell(tf.contrib.rnn.RNNCell):
         self._mlpDec = MLP(init_scale=self._init_scale, dimFor=self._dimMLPdec)
         # the recurrent network.
         self._rnn = buildRec(self._dimRec, self._recType, self._init_scale)
+        #
+        self._train = train
+        #
+        initializer = tf.random_uniform_initializer(-self._init_scale, self._init_scale)
+        with tf.variable_scope('prior', initializer=initializer):
+            self._Wp_mu = tf.get_variable('Wp_mu', shape=(self._dimRec[-1], self._dimState))
+            self._bp_mu = tf.get_variable('bp_mu', shape=self._dimState, initializer=tf.zeros_initializer)
+            self._Wp_sig = tf.get_variable('Wp_sig', shape=(self._dimRec[-1], self._dimState))
+            self._bp_sig = tf.get_variable('bp_sig', shape=self._dimState, initializer=tf.zeros_initializer)
+        with tf.variable_scope('encoder', initializer=initializer):
+            if len(self._dimMLPenc) != 0:
+                inputshape = self._dimMLPenc[-1]
+            else:
+                inputshape = self._dimRec[-1]
+                if len(self._dimMLPx) != 0:
+                    inputshape += self._dimMLPx[-1]
+                else:
+                    inputshape += self._dimInput
+            self._Wenc_mu = tf.get_variable('Wenc_mu', shape=(inputshape, self._dimState))
+            self._benc_mu = tf.get_variable('benc_mu', shape=self._dimState, initializer=tf.zeros_initializer)
+            self._Wenc_sig = tf.get_variable('Wenc_sig', shape=(inputshape, self._dimState))
+            self._benc_sig = tf.get_variable('benc_sig', shape=self._dimState, initializer=tf.zeros_initializer)
 
     @property
     def state_size(self):
         return self._dimState
 
+
     @property
     def output_size(self):
-        temp = 0
         if len(self._dimMLPdec) != 0:
-            temp = self._mlpDec[-1]
+            temp = self._dimMLPdec[-1]
         else:
             temp = self._dimRec[-1]
-            if len(self._dimMLPx) != 0:
-                temp += self._dimMLPx[-1]
+            if len(self._dimMLPz) != 0:
+                temp += self._dimMLPz[-1]
+            else:
+                temp += self._dimState
         return (self._dimState, self._dimState, self._dimState, self._dimState,
                 temp, self._dimRec[-1])
+
+    """
+    setGen: setting the generative models.
+    """
+    def setGen(self):
+        self._train = False
+
+    def setTrain(self):
+        self._train = True
 
     """
     __call__:
@@ -341,28 +375,24 @@ class varCell(tf.contrib.rnn.RNNCell):
         # Compute the prior.
         initializer = tf.random_uniform_initializer(-self._init_scale, self._init_scale)
         with tf.variable_scope('prior', initializer=initializer):
-            Wp_mu = tf.get_variable('Wp_mu', shape=(self._dimRec[-1], self._dimState))
-            bp_mu = tf.get_variable('bp_mu', shape=self._dimState, initializer=tf.zeros_initializer)
-            Wp_sig = tf.get_variable('Wp_sig', shape=(self._dimRec[-1], self._dimState))
-            bp_sig = tf.get_variable('bp_sig', shape=self._dimState, initializer=tf.zeros_initializer)
             # compute the mean and variance of P(Z) based on h_{t-1}
-            prior_mu = tf.matmul(h_tm1, Wp_mu) + bp_mu
-            prior_sig = tf.nn.softplus(tf.matmul(h_tm1, Wp_sig) + bp_sig) + 1e-8
+            prior_mu = tf.matmul(h_tm1, self._Wp_mu) + self._bp_mu
+            prior_sig = tf.nn.softplus(tf.matmul(h_tm1, self._Wp_sig) + self._bp_sig) + 1e-8
         # Compute the encoder.
         with tf.variable_scope('encoder', initializer=initializer):
             xx = self._mlpx(x)
             hidden_enc = self._mlpEnc(tf.concat(axis=1, values=(xx, h_tm1)))
-            Wenc_mu = tf.get_variable('Wenc_mu', shape=(hidden_enc.shape[-1], self._dimState))
-            benc_mu = tf.get_variable('benc_mu', shape=self._dimState, initializer=tf.zeros_initializer)
-            Wenc_sig = tf.get_variable('Wenc_sig', shape=(hidden_enc.shape[-1], self._dimState))
-            benc_sig = tf.get_variable('benc_sig', shape=self._dimState, initializer=tf.zeros_initializer)
             # compute the mean and variance of the posterior P(Z|X).
-            pos_mu = tf.matmul(hidden_enc, Wenc_mu) + benc_mu
-            pos_sig = tf.nn.softplus(tf.matmul(hidden_enc, Wenc_sig) + benc_sig) + 1e-8
-            # sample Z from the posterior.
-            eps = tf.distributions.Normal(loc=0.0, scale=1.0
-                                          ).sample(sample_shape=(tf.shape(x)[0], self._dimState))
+            pos_mu = tf.matmul(hidden_enc, self._Wenc_mu) + self._benc_mu
+            pos_sig = tf.nn.softplus(tf.matmul(hidden_enc, self._Wenc_sig) + self._benc_sig) + 1e-8
+
+        # sample Z from the posterior.
+        eps = tf.distributions.Normal(loc=0.0, scale=1.0
+                                      ).sample(sample_shape=(tf.shape(x)[0], self._dimState))
+        if self._train:
             z = pos_mu + pos_sig * eps
+        else:
+            z = prior_mu + prior_sig * eps
         # Compute the decoder.
         with tf.variable_scope('decoder', initializer=initializer):
             zz = self._mlpz(z)
@@ -406,3 +436,4 @@ def buildVRNN(
         # run the whole model.
         state = allCell.zero_state(tf.shape(x)[0], dtype=tf.float32)
         (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1), _ = tf.nn.dynamic_rnn(allCell, x, initial_state=state)
+        return prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1

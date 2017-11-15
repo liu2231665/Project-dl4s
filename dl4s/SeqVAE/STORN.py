@@ -69,6 +69,7 @@ class _STORN(object):
                 = buildSTORN(self.x, self._graph, configSTORN)
             # <pass> will be define in the children classes.
             self._loss = GaussKL(self._muZ, self._sigZ**2, 0.0, 1.0)
+            self._kl_divergence = self._loss
             # <pass> will be define in the children classes.
             self._train_step = None
             # <pass> the output of the recognition model.
