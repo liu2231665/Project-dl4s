@@ -46,4 +46,3 @@ if __name__ == '__main__':
         STORN = binSTORN(Config)
         print('Evaluation: start computing the accuracy metric.')
         ACC = accRNN(STORN, Dataset['test'], batchSize=125)
-        print('The testing transcription accuracy is \x1b[1;91m%10.4f\x1b[0m.' % ACC)

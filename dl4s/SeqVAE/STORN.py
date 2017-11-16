@@ -152,6 +152,17 @@ class _STORN(object):
         return
 
     """#########################################################################
+    output_function: reconstruction function.
+    input: input - .
+    output: should be the reconstruction represented by the probability.
+    #########################################################################"""
+    def output_function(self, input):
+        with self._graph.as_default():
+            zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
+            con_input = np.concatenate((zero_padd, input), axis=1)
+            return self._sess.run(self._allgenOut, feed_dict={self.x: con_input})
+
+    """#########################################################################
     saveModel:save the trained model into disk.
     input: savePath - another saving path, if not provide, use the default path.
     output: None

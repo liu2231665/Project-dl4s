@@ -1,9 +1,15 @@
 """#########################################################################
 Author: Yingru Liu
 Institute: Stony Brook University
+<<<<<<< HEAD
 Descriptions: the code to train and run the binVRNN from dl4s.seqVAE
               under the "Lakh Midi data-set".
               ----2017.11.15
+=======
+Descriptions: the code to train and run the binSTORN from dl4s.seqVAE
+              under the "Lakh Midi data-set".
+              ----2017.11.11
+>>>>>>> 5de115047346106b2dfd53c35f49584f9b90779e
 #########################################################################"""
 from Projects.LakhMidi.fetchData import fetchData
 from dl4s import binVRNN
@@ -46,7 +52,7 @@ if __name__ == '__main__':
     if Flag == 'evaluation':
         Config.loadPath = os.path.join(Config.savePath, 'VRNN-I')
         Dataset = fetchData()
-        STORN = VRNN(Config)
+        VRNN = binVRNN(Config)
         print('Evaluation: start computing the accuracy metric.')
-        ACC = accRNN(STORN, Dataset['test'], batchSize=125)
+        ACC = accRNN(VRNN, Dataset['test'], batchSize=125)
         print('The testing transcription accuracy is \x1b[1;91m%10.4f\x1b[0m.' % ACC)
