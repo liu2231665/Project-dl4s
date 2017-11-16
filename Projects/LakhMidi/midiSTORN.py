@@ -22,7 +22,7 @@ Config.eventPath = './binSTORN/'
 Config.savePath = './binSTORN/'
 SAVETO = './binSTORN/historyMidiSTORN.npz'
 
-Flag = 'training'                       # {'training'/'evaluation'}
+Flag = 'evaluation'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
     if Flag == 'training':
@@ -36,9 +36,14 @@ if __name__ == '__main__':
         Config.savePath = os.path.join(Config.savePath, 'STORN-I')
         # Build the model and prepare the data-set.
         Dataset = fetchData()
-        RNN = binSTORN(Config)
-        RNN.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.05,
+        STORN = binSTORN(Config)
+        STORN.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.03,
                           valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':
-        pass
+        Config.loadPath = os.path.join(Config.savePath, 'STORN-II')
+        Dataset = fetchData()
+        STORN = binSTORN(Config)
+        print('Evaluation: start computing the accuracy metric.')
+        ACC = accRNN(STORN, Dataset['test'], batchSize=125)
+        print('The testing transcription accuracy is \x1b[1;91m%10.4f\x1b[0m.' % ACC)

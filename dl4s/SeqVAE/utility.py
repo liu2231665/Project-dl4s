@@ -453,3 +453,49 @@ def buildVRNN(
         state = allCell.zero_state(tf.shape(x)[0], dtype=tf.float32)
         (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1), _ = tf.nn.dynamic_rnn(allCell, x, initial_state=state)
         return prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1, allCell
+
+
+"""###############################################SRNN#####################################################"""
+#####################################################
+# Descriptions: Tools of the SRNN.                  #
+#             ----2017.11.15                        #
+#####################################################
+"""#########################################################################
+Class: configSRNN - Basic configuration of the SRNN models. 
+       For the model details, please refer to:
+       "Sequential Neural Models with Stochastic Layers" - arxiv.
+        https://arxiv.org/abs/1605.07571
+#########################################################################"""
+class configSRNN(object):
+    recType = 'LSTM'            # <string> the type of recurrent hidden units(LSTM/GRU/Tanh).
+    mlpType = 'relu'            # <string> the type of feedforward hidden units(relu/tanh/sigmoid).
+    mode = 'smooth'             # <string> indicate the operating mode of SRNN (smooth/filter).
+    dimRecD = []                # <scalar list> the size of forward recurrent hidden layers.
+    dimRecA = []                # <scalar list> the size of backward recurrent hidden layers.
+    dimInput = 100              # <scalar> the size of frame of the input.
+    dimState = 100              # <scalar> the size of the stochastic layer.
+    init_scale = 0.1            # <scalar> the initialized scales of the weight.
+    float = 'float32'           # <string> the type of float.
+    Opt = 'SGD'                 # <string> the optimization method.
+    savePath = None             # <string/None> the path to save the model.
+    eventPath = None            # <string/None> the path to save the events for visualization.
+    loadPath = None             # <string/None> the path to load the model.
+
+"""#########################################################################
+Class: stoCell - the stochastic cell of the SRNN models. 
+#########################################################################"""
+class stoCell(tf.contrib.rnn.RNNCell):
+    pass
+
+"""#########################################################################
+Function: buildSRNN - build the whole graph of SRNN. 
+input: x - a placeholder that indicates the input data. [batch, step, frame]
+       graph - the default tf.graph that we build the model.
+       Config - model configuration.
+#########################################################################"""
+def buildSRNN(
+        x,
+        graph,
+        Config=configSRNN(),
+):
+    pass

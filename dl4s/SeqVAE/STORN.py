@@ -1,7 +1,7 @@
 """#########################################################################
 Author: Yingru Liu
 Institute: Stony Brook University
-Descriptions: the file contains the model description of SRNN.
+Descriptions: the file contains the model description of STORN.
               ----2017.11.03
 #########################################################################"""
 
@@ -360,6 +360,18 @@ class binSTORN(_STORN, object):
             samples = tf.concat(samples, 0)
         return self._sess.run(samples)
 
+    """#########################################################################
+    output_function: generate the reconstruction of input.
+    input: input - .
+    output: the reconstruction indicated by the binary probability.
+    #########################################################################"""
+    def output_function(self, input):
+        with self._graph.as_default():
+            zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
+            con_input = np.concatenate((zero_padd, input), axis=1)
+            prob = self._sess.run( self._allgenOut, feed_dict={self.x: con_input})
+        return prob
+
 
 """#########################################################################
 Class: gaussSTORN - the STORN model for stochastic continuous inputs.
@@ -420,3 +432,15 @@ class gaussSTORN(_STORN, object):
                     samples.append(x_)
             samples = tf.concat(samples, 0)
         return self._sess.run(samples)
+
+    """#########################################################################
+    output_function: generate the reconstruction of input.
+    input: input - .
+    output: the reconstruction indicated by the mean of conditional Gaussian.
+    #########################################################################"""
+    def output_function(self, input):
+        with self._graph.as_default():
+            zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
+            con_input = np.concatenate((zero_padd, input), axis=1)
+            mean, std = self._sess.run(self._allgenOut, feed_dict={self.x: con_input})
+        return mean, std
