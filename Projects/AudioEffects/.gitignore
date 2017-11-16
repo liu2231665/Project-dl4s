@@ -103,6 +103,7 @@ ENV/
 #ignore the cache folder for Pycharm.
 dataset/
 audioRNN/
+audioSTORN/
 audioRNN/RNN-I.data-00000-of-00001
 audioRNN/RNN-I.index
 audioRNN/RNN-I.meta
