@@ -36,11 +36,15 @@ if __name__ == '__main__':
         if not os.path.exists(Config.savePath):
             os.makedirs(Config.savePath)
         # Add the save file name into the save path.
-            Config.savePath = os.path.join(Config.savePath, 'STORN')
+        Config.savePath = os.path.join(Config.savePath, 'STORN')
         RNN = gaussSTORN(Config)
         RNN.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.001,
                        valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':
-        pass
+        Config.loadPath = os.path.join(Config.savePath, 'STORN')
+        RNN = gaussSTORN(Config)
+        print('Evaluation: start computing the RMSE metric.')
+        RMSE = rmseRNN(RNN, Dataset['test'], batchSize=125)
+        print('The testing reconstructed error is \x1b[1;91m%10.4f\x1b[0m.' % RMSE)
 
