@@ -5,6 +5,7 @@ Descriptions: Tools to build an sequential VAE.
               ----2017.11.03
 #########################################################################"""
 import tensorflow as tf
+from tensorflow.python.ops import variable_scope as vs
 
 """#########################################################################
 Function: buildRec - build the recurrent hidden layers.
@@ -40,22 +41,28 @@ input: init_scale - the initial scale.
        dimFor - the dimensions of layers in MLP.
 #########################################################################"""
 class MLP(object):
-    def __init__(self, init_scale, dimFor=[], unitType='relu'):
+    def __init__(self, init_scale, dimInput, dimFor=[], unitType='relu'):
+        self._dimInput = dimInput
         self._dimFor = dimFor
         self._unitType = unitType
         self._init_scale = init_scale
+        self._W = []
+        self._b = []
+        initializer = tf.random_uniform_initializer(-self._init_scale, self._init_scale)
+        for l in range(len(self._dimFor)):
+            if l == 0:
+                self._W.append(tf.get_variable('W'+str(l), shape=(self._dimInput, self._dimFor[l])))
+            else:
+                self._W.append(tf.get_variable('W'+str(l), shape=(self._dimFor[l-1], self._dimFor[l])))
+            self._b.append(tf.get_variable('b'+str(l), shape=self._dimFor[l], initializer=tf.zeros_initializer))
 
     def __call__(self, x):
         if len(self._dimFor) == 0:
             return x
         # build the network.
         xx = x
-        initializer = tf.random_uniform_initializer(-self._init_scale, self._init_scale)
         for l in range(len(self._dimFor)):
-            with tf.variable_scope("MLP-"+str(l), initializer=initializer):
-                W = tf.get_variable('W', shape=(xx.shape[-1], self._dimFor[l]))
-                b = tf.get_variable('b', shape=self._dimFor[l], initializer=tf.zeros_initializer)
-                logit = tf.tensordot(xx, W, [[-1], [0]]) + b
+                logit = tf.tensordot(xx, self._W[l], [[-1], [0]]) + self._b[l]
                 if self._unitType == 'relu':
                     xx = tf.nn.relu(logit, name="relu-"+str(l))
                 elif self._unitType == 'tanh':
@@ -301,13 +308,29 @@ class varCell(tf.contrib.rnn.RNNCell):
         self._mlpType = config.mlpType              # the type of units for recurrent layers.
         self._init_scale = configSTORN.init_scale   # the initialized scale for the model.
         # the feedforward network of input X.
-        self._mlpx = MLP(init_scale=self._init_scale, dimFor=self._dimMLPx)
+        with tf.variable_scope('mlpx'):
+            self._mlpx = MLP(init_scale=self._init_scale, dimInput=self._dimInput, dimFor=self._dimMLPx)
         # the feedforward network of state Z.
-        self._mlpz = MLP(init_scale=self._init_scale, dimFor=self._dimMLPz)
+        with tf.variable_scope('mlpz'):
+            self._mlpz = MLP(init_scale=self._init_scale, dimInput=self._dimState, dimFor=self._dimMLPz)
         # the feedforward network for encoder.
-        self._mlpEnc = MLP(init_scale=self._init_scale, dimFor=self._dimMLPenc)
+        temp = self._dimRec[-1]
+        if len(self._dimMLPx) != 0:
+            temp += self._dimMLPx[-1]
+        else:
+            temp += self._dimInput
+
+        with tf.variable_scope('mlpEnc'):
+            self._mlpEnc = MLP(init_scale=self._init_scale, dimInput=temp, dimFor=self._dimMLPenc)
         # the feedforward network for decoder.
-        self._mlpDec = MLP(init_scale=self._init_scale, dimFor=self._dimMLPdec)
+        temp = self._dimRec[-1]
+        if len(self._dimMLPz) != 0:
+            temp += self._dimMLPz[-1]
+        else:
+            temp += self._dimState
+
+        with tf.variable_scope('mlpDec'):
+            self._mlpDec = MLP(init_scale=self._init_scale, dimInput=temp, dimFor=self._dimMLPdec)
         # the recurrent network.
         self._rnn = buildRec(self._dimRec, self._recType, self._init_scale)
         #

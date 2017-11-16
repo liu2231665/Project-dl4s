@@ -1,4 +1,3 @@
-# TODO:
 """#########################################################################
 Author: Yingru Liu
 Institute: Stony Brook University
@@ -135,7 +134,7 @@ class _STORN(object):
     """#########################################################################
     recognitionOutput: compute the P(Z|X) with given X.
     input: input - numerical input.
-    output: the mean and variance of P(Z|X).
+    output: the mean and std of P(Z|X).
     #########################################################################"""
     def recognitionOutput(self, input):
         with self._graph.as_default():

@@ -38,7 +38,7 @@ if __name__ == '__main__':
         # Add the save file name into the save path.
             Config.savePath = os.path.join(Config.savePath, 'STORN')
         RNN = gaussSTORN(Config)
-        RNN.full_train(dataset=Dataset, maxEpoch=300, batchSize= 125, earlyStop=10, learning_rate=0.001,
+        RNN.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.001,
                        valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':
