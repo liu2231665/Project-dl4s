@@ -5,7 +5,6 @@ Descriptions: Tools to build an sequential VAE.
               ----2017.11.03
 #########################################################################"""
 import tensorflow as tf
-from tensorflow.python.ops import variable_scope as vs
 
 """#########################################################################
 Function: buildRec - build the recurrent hidden layers.
@@ -306,7 +305,7 @@ class varCell(tf.contrib.rnn.RNNCell):
         self._dimMLPdec = config.dimForDec
         self._recType = config.recType              # the type of units for recurrent layers.
         self._mlpType = config.mlpType              # the type of units for recurrent layers.
-        self._init_scale = configSTORN.init_scale   # the initialized scale for the model.
+        self._init_scale = config.init_scale        # the initialized scale for the model.
         # the feedforward network of input X.
         with tf.variable_scope('mlpx'):
             self._mlpx = MLP(init_scale=self._init_scale, dimInput=self._dimInput, dimFor=self._dimMLPx)
@@ -472,6 +471,8 @@ class configSRNN(object):
     mode = 'smooth'             # <string> indicate the operating mode of SRNN (smooth/filter).
     dimRecD = []                # <scalar list> the size of forward recurrent hidden layers.
     dimRecA = []                # <scalar list> the size of backward recurrent hidden layers.
+    dimEnc = []
+    dimDec = []
     dimInput = 100              # <scalar> the size of frame of the input.
     dimState = 100              # <scalar> the size of the stochastic layer.
     init_scale = 0.1            # <scalar> the initialized scales of the weight.
@@ -485,7 +486,27 @@ class configSRNN(object):
 Class: stoCell - the stochastic cell of the SRNN models. 
 #########################################################################"""
 class stoCell(tf.contrib.rnn.RNNCell):
-    pass
+    """
+    __init__: the initialization function.
+    input: configVRNN - configuration class in ./utility.
+    output: None.
+    """
+    def __init__(self, d_t, a_t, config=configSRNN, train=True):
+        self._dimState = config.dimState
+        self._dimInput = config.dimInput
+        self._dimEnc = config.dimEnc
+        self._dimDec = config.dimDec
+        self._dt = d_t
+        self._at = a_t
+        self._recType = config.recType              # the type of units for recurrent layers.
+        self._mlpType = config.mlpType              # the type of units for recurrent layers.
+        self._init_scale = configSRNN.init_scale    # the initialized scale for the model.
+        #
+        self._train = train
+        # Encoder Input = [Z{t-1}, a{t}]
+        self._encoder = MLP(self._init_scale, self._dt.shape[0]+self._dimState, self._dimEnc, self._mlpType)
+        # Decoder Input = [Z{t}, d{t}]
+        self._decoder = MLP(self._init_scale, self._dt.shape[0]+self._dimState, self._dimDec, self._mlpType)
 
 """#########################################################################
 Function: buildSRNN - build the whole graph of SRNN. 
@@ -498,4 +519,25 @@ def buildSRNN(
         graph,
         Config=configSRNN(),
 ):
-    pass
+    with graph.as_default():
+        # define the variational cell of VRNN
+        forwardCell = buildRec(Config.dimRecD, Config.recType, Config.init_scale)  # the hidden layer part of the recognition model.
+        # run the forward recurrent layers to compute the deterministic transition.
+        state = forwardCell.zero_state(tf.shape(x)[0], dtype=tf.float32)
+        d_t, _ = tf.nn.dynamic_rnn(forwardCell, x, initial_state=state)
+        paddings = tf.constant([[0, 1, 0], [0, 0, 0]])
+        d_t = tf.pad(d_t[:, 0:-1, :], paddings)
+        # run the backward recurrent layers or MLP to compute a_t.
+        if Config.mode == 'smooth':
+            backwardCell = buildRec(Config.dimRecA, Config.recType, Config.init_scale)
+            state = backwardCell.zero_state(tf.shape(x)[0], dtype=tf.float32)
+            a_t, _ = tf.nn.dynamic_rnn(backwardCell, tf.reverse(tf.concat(axis=-1, values=(d_t, x)), 1), initial_state=state)
+        elif Config.mode == 'filter':
+            backwardCell = MLP(Config.init_scale, Config.dimRecD[-1] + Config.dimInput,
+                               Config.dimRecA, Config.mlpType)
+            a_t = backwardCell(tf.concat(axis=1, values=(d_t, x)))
+        else:
+            raise ValueError("The operating mode is not correct!!(Should be smooth/filter)")
+        paddings = tf.constant([[0, 0, 0], [0, 1, 0]])
+        a_t = tf.pad(a_t[:, 1:, :], paddings)
+        pass

@@ -110,3 +110,8 @@ audioRNN/RNN-I.meta
 audioRNN-II/
 audioRNN/
 audioSTORN/
+*.index
+*.meta
+checkpoint
+*.npz
+*.data-00000-of-00001

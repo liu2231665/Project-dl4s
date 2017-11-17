@@ -106,3 +106,8 @@ binRNN/
 binRNN-II/
 binSTORN/
 binVRNN/
+*.index
+*.meta
+checkpoint
+*.npz
+*.data-00000-of-00001
