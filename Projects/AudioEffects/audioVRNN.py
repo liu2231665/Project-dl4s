@@ -37,14 +37,14 @@ if __name__ == '__main__':
         # Check whether the target saving path exists.
         if not os.path.exists(Config.savePath):
             os.makedirs(Config.savePath)
-        STORN = gaussVRNN(Config)
-        STORN.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.001,
+        VRNN = gaussVRNN(Config)
+        VRNN.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.001,
                        valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':
         Config.loadPath = Config.savePath
-        STORN = gaussVRNN(Config)
+        VRNN = gaussVRNN(Config)
         print('Evaluation: start computing the RMSE metric.')
-        RMSE = rmseRNN(STORN, Dataset['test'], batchSize=125)
+        RMSE = rmseRNN(VRNN, Dataset['test'], batchSize=125)
         print('The testing reconstructed error is \x1b[1;91m%10.4f\x1b[0m.' % RMSE)
 
