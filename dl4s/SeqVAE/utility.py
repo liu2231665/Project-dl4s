@@ -427,7 +427,7 @@ class varCell(tf.contrib.rnn.RNNCell):
     zero_state: generate the zero initial state of the cells.
     input: batch_size - the batch size of data chunk.
            dtype - the data type.
-    output: state0 + state1 - the initial zero states.
+    output: state0 - the initial zero states.
     """
     def zero_state(self, batch_size, dtype):
         state0 = self._rnn.zero_state(batch_size, dtype)
@@ -488,25 +488,108 @@ Class: stoCell - the stochastic cell of the SRNN models.
 class stoCell(tf.contrib.rnn.RNNCell):
     """
     __init__: the initialization function.
-    input: configVRNN - configuration class in ./utility.
+    input: configSRNN - configuration class in ./utility.
+           train - indicate whether the model is trained or sampling.
     output: None.
     """
-    def __init__(self, d_t, a_t, config=configSRNN, train=True):
+    def __init__(self, config=configSRNN, train=True):
+        self._train = train
         self._dimState = config.dimState
         self._dimInput = config.dimInput
         self._dimEnc = config.dimEnc
         self._dimDec = config.dimDec
-        self._dt = d_t
-        self._at = a_t
+        self._dimDt = config.dimRecD[-1]
+        if len(config.dimRecA) != 0:
+            self._dimAt = config.dimRecA[-1]
+        else:
+            self._dimAt = config.dimRecD[-1] + config.dimInput
+        # define the hidden output shape of the encoder.
+        if len(self._dimEnc) != 0:
+            self._dimOutEnc = self._dimEnc[-1]
+        else:
+            self._dimOutEnc = self._dimAt + self._dimState
+        #
         self._recType = config.recType              # the type of units for recurrent layers.
         self._mlpType = config.mlpType              # the type of units for recurrent layers.
         self._init_scale = configSRNN.init_scale    # the initialized scale for the model.
-        #
-        self._train = train
-        # Encoder Input = [Z{t-1}, a{t}]
-        self._encoder = MLP(self._init_scale, self._dt.shape[0]+self._dimState, self._dimEnc, self._mlpType)
         # Decoder Input = [Z{t}, d{t}]
-        self._decoder = MLP(self._init_scale, self._dt.shape[0]+self._dimState, self._dimDec, self._mlpType)
+        with tf.variable_scope('DecMLP'):
+            self._decoder = MLP(self._init_scale, self._dimState+self._dimDt, self._dimDec, self._mlpType)
+
+        # Encoder Input = [Z{t-1}, a{t}]
+        with tf.variable_scope('EncMLP'):
+            self._encoder = MLP(self._init_scale, self._dimState+self._dimAt, self._dimEnc, self._mlpType)
+        # system's parameter for the prior P(Z)= NN(Z{t-1}, d{t})
+        initializer = tf.random_uniform_initializer(-self._init_scale, self._init_scale)
+        with tf.variable_scope('prior', initializer=initializer):
+            self._Wp_mu = tf.get_variable('Wp_mu', shape=(self._dimState+self._dimDt, self._dimState))
+            self._bp_mu = tf.get_variable('bp_mu', shape=self._dimState, initializer=tf.zeros_initializer)
+            self._Wp_sig = tf.get_variable('Wp_sig', shape=(self._dimState+self._dimDt, self._dimState))
+            self._bp_sig = tf.get_variable('bp_sig', shape=self._dimState, initializer=tf.zeros_initializer)
+
+        with tf.variable_scope('encoder', initializer=initializer):
+            self._Wpos_mu = tf.get_variable('Wpos_mu', shape=(self._dimOutEnc, self._dimState))
+            self._bpos_mu = tf.get_variable('bpos_mu', shape=self._dimState, initializer=tf.zeros_initializer)
+            self._Wpos_sig = tf.get_variable('Wpos_sig', shape=(self._dimOutEnc, self._dimState))
+            self._bpos_sig = tf.get_variable('bpos_sig', shape=self._dimState, initializer=tf.zeros_initializer)
+
+    """
+    __call__:
+    input: x - the current input with size (batch, frame) where frame = [d_t, a_t]
+               the bounds between them is 0~dimDt, dimDt~end
+           state - the previous state of the cells.
+           scope - indicate the variable scope.
+    output: 
+    """
+    def __call__(self, x, state, scope=None):
+        with tf.variable_scope('prior'):
+            # compute the mean and std of P(Z) based on [Z{t-1}, d_{t-1}]
+            d_tm1 = x[:, 0:self._dimDt]
+            prior_mu = tf.matmul(tf.concat(axis=1, values=(state, d_tm1)), self._Wp_mu) + self._bp_mu
+            prior_sig = tf.nn.softplus(tf.matmul(tf.concat(axis=1, values=(state, d_tm1))
+                                                 , self._Wp_sig) + self._bp_sig) + 1e-8
+        with tf.variable_scope('encoder'):
+            # build post mean and std of the inference network by NN(Z{t-1}, at)
+            a_t = x[:, self._dimDt:]
+            actPos = self._encoder(tf.concat(axis=1, values=(state, a_t)))
+            pos_mu = tf.matmul(actPos, self._Wpos_mu) + self._bpos_mu
+            pos_sig = tf.nn.softplus(tf.matmul(actPos, self._Wpos_sig) + self._bpos_sig) + 1e-8
+            # sample Z/NewSate from the posterior.
+            eps = tf.distributions.Normal(loc=0.0, scale=1.0
+                                          ).sample(sample_shape=(tf.shape(x)[0], self._dimState))
+            if self._train:
+                z = pos_mu + pos_sig * eps
+            else:
+                z = prior_mu + prior_sig * eps
+        with tf.variable_scope('decoder'):
+            # Compute the decoder with input = [Z{t}, d{t}]
+            hidden_dec = self._decoder(tf.concat(axis=1, values=(z, d_tm1)))
+
+        return (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec), z
+
+    """
+    zero_state: generate the zero initial state of the cells.
+    input: batch_size - the batch size of data chunk.
+           dtype - the data type.
+    output: state0 - the initial zero states.
+    """
+    def zero_state(self, batch_size, dtype):
+        state0 = tf.distributions.Normal(loc=0.0, scale=1.0).sample(sample_shape=(batch_size, self._dimState))
+        return state0
+
+    @property
+    def state_size(self):
+        return self._dimState
+
+    @property
+    def output_size(self):
+        if len(self._dimDec) != 0:
+            temp = self._dimDec[-1]
+        else:
+            temp = self._dimState + self._dimDt
+        return (self._dimState, self._dimState, self._dimState, self._dimState,
+                temp)
+
 
 """#########################################################################
 Function: buildSRNN - build the whole graph of SRNN. 
@@ -521,23 +604,28 @@ def buildSRNN(
 ):
     with graph.as_default():
         # define the variational cell of VRNN
-        forwardCell = buildRec(Config.dimRecD, Config.recType, Config.init_scale)  # the hidden layer part of the recognition model.
-        # run the forward recurrent layers to compute the deterministic transition.
-        state = forwardCell.zero_state(tf.shape(x)[0], dtype=tf.float32)
-        d_t, _ = tf.nn.dynamic_rnn(forwardCell, x, initial_state=state)
-        paddings = tf.constant([[0, 1, 0], [0, 0, 0]])
-        d_t = tf.pad(d_t[:, 0:-1, :], paddings)
+        with tf.variable_scope("forwardCell"):
+            forwardCell = buildRec(Config.dimRecD, Config.recType, Config.init_scale)  # the hidden layer part of the recognition model.
+            # run the forward recurrent layers to compute the deterministic transition.
+            paddings = tf.constant([[0, 0], [1, 0], [0, 0]])
+            xx = tf.pad(x[:, 0:-1, :], paddings)
+            state = forwardCell.zero_state(tf.shape(xx)[0], dtype=tf.float32)
+            d_t, _ = tf.nn.dynamic_rnn(forwardCell, xx, initial_state=state)
         # run the backward recurrent layers or MLP to compute a_t.
-        if Config.mode == 'smooth':
-            backwardCell = buildRec(Config.dimRecA, Config.recType, Config.init_scale)
-            state = backwardCell.zero_state(tf.shape(x)[0], dtype=tf.float32)
-            a_t, _ = tf.nn.dynamic_rnn(backwardCell, tf.reverse(tf.concat(axis=-1, values=(d_t, x)), 1), initial_state=state)
-        elif Config.mode == 'filter':
-            backwardCell = MLP(Config.init_scale, Config.dimRecD[-1] + Config.dimInput,
-                               Config.dimRecA, Config.mlpType)
-            a_t = backwardCell(tf.concat(axis=1, values=(d_t, x)))
-        else:
-            raise ValueError("The operating mode is not correct!!(Should be smooth/filter)")
-        paddings = tf.constant([[0, 0, 0], [0, 1, 0]])
-        a_t = tf.pad(a_t[:, 1:, :], paddings)
-        pass
+        with tf.variable_scope("backward"):
+            if Config.mode == 'smooth':
+                backwardCell = buildRec(Config.dimRecA, Config.recType, Config.init_scale)
+                state = backwardCell.zero_state(tf.shape(x)[0], dtype=tf.float32)
+                a_t, _ = tf.nn.dynamic_rnn(backwardCell, tf.reverse(tf.concat(axis=-1, values=(d_t, x)), [1]), initial_state=state)
+            elif Config.mode == 'filter':
+                backwardCell = MLP(Config.init_scale, Config.dimRecD[-1] + Config.dimInput,
+                                   Config.dimRecA, Config.mlpType)
+                a_t = backwardCell(tf.concat(axis=-1, values=(d_t, x)))
+            else:
+                a_t = None
+                raise ValueError("The operating mode is not correct!!(Should be smooth/filter)")
+        # the state space model cell.
+        SSM = stoCell(Config)
+        state = SSM.zero_state(tf.shape(x)[0], dtype=tf.float32)
+        (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec), _ = tf.nn.dynamic_rnn(SSM, tf.concat(axis=-1, values=(d_t, a_t)), initial_state=state)
+        return prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec
