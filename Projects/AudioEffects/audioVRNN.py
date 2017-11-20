@@ -11,7 +11,7 @@ from Projects.AudioEffects.fetchData import fetchData
 from Projects.AudioEffects.rmseTool import rmseRNN
 import os
 
-Config.Opt = 'SGD'
+Config.Opt = 'Adam'
 Config.unitType = 'GRU'
 Config.dimRec = [500]
 Config.dimForX = [400]
@@ -25,7 +25,7 @@ Config.eventPath = './audioVRNN/'
 Config.savePath = './audioVRNN/'
 SAVETO = './audioVRNN/historyaudioVRNN.npz'
 
-Flag = 'training'                       # {'training'/'evaluation'}
+Flag = 'evaluation'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
     Dataset = fetchData()
@@ -38,7 +38,7 @@ if __name__ == '__main__':
         if not os.path.exists(Config.savePath):
             os.makedirs(Config.savePath)
         VRNN = gaussVRNN(Config)
-        VRNN.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.001,
+        VRNN.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.0001,
                        valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':

@@ -473,6 +473,7 @@ class configSRNN(object):
     dimRecA = []                # <scalar list> the size of backward recurrent hidden layers.
     dimEnc = []
     dimDec = []
+    dimMLPx = []                # <scalar list> the size of MLP of X.
     dimInput = 100              # <scalar> the size of frame of the input.
     dimState = 100              # <scalar> the size of the stochastic layer.
     init_scale = 0.1            # <scalar> the initialized scales of the weight.
@@ -604,13 +605,14 @@ def buildSRNN(
 ):
     with graph.as_default():
         # define the variational cell of VRNN
+        MLPx = MLP(Config.init_scale, Config.dimInput, Config.dimMLPx, Config.mlpType)
         with tf.variable_scope("forwardCell"):
             forwardCell = buildRec(Config.dimRecD, Config.recType, Config.init_scale)  # the hidden layer part of the recognition model.
             # run the forward recurrent layers to compute the deterministic transition.
             paddings = tf.constant([[0, 0], [1, 0], [0, 0]])
             xx = tf.pad(x[:, 0:-1, :], paddings)
             state = forwardCell.zero_state(tf.shape(xx)[0], dtype=tf.float32)
-            d_t, _ = tf.nn.dynamic_rnn(forwardCell, xx, initial_state=state)
+            d_t, _ = tf.nn.dynamic_rnn(forwardCell, MLPx(xx), initial_state=state)
         # run the backward recurrent layers or MLP to compute a_t.
         with tf.variable_scope("backward"):
             if Config.mode == 'smooth':

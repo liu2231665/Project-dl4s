@@ -350,6 +350,14 @@ class binVRNN(_VRNN, object):
             samples = tf.concat(samples, 0)
         return self._sess.run(samples)
 
+    """#########################################################################
+    output_function: reconstruction function.
+    input: input - .
+    output: should be the reconstruction represented by the probability.
+    #########################################################################"""
+    def output_function(self, input):
+            return self._sess.run(self._dec, feed_dict={self.x: input})
+
 """#########################################################################
 Class: gaussVRNN - the VRNN model for stochastic continuous inputs.
 #########################################################################"""
@@ -409,3 +417,12 @@ class gaussVRNN(_VRNN, object):
                 samples.append(x_)
             samples = tf.concat(samples, 0)
         return self._sess.run(samples)
+
+    """#########################################################################
+    output_function: reconstruction function.
+    input: input - .
+    output: should be the reconstruction represented by the probability.
+    #########################################################################"""
+    def output_function(self, input):
+        mean, std = self._sess.run(self._dec, feed_dict={self.x: input})
+        return mean, std
