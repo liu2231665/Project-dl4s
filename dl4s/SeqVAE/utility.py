@@ -43,6 +43,7 @@ class MLP(object):
     def __init__(self, init_scale, dimInput, dimFor=[], unitType='relu'):
         self._dimInput = dimInput
         self._dimFor = dimFor
+        self._dimOutput = self._dimInput if len(self._dimFor) == 0 else self._dimFor[-1]
         self._unitType = unitType
         self._init_scale = init_scale
         self._W = []
