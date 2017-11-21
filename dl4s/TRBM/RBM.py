@@ -149,7 +149,7 @@ class binRBM(_RBM, object):
                default and the RBM will define its own input tensor.
            Q - the tensor that represents the proposal distribution Q for NVIL.
                None in default and dimQ should be provide to build the Q.
-           dimQ - the dimension of hidden layer of MLP to build the Q.
+           dimQ - the number of kernal in Q.
            W - the weight matrix that maybe provided by outer parts. None in
                default and the RBM will define its own input tensor.
            bv - the visible bias that maybe provided by outer parts. None in
@@ -166,6 +166,7 @@ class binRBM(_RBM, object):
             init_scale,
             x=None,
             Q=None,
+            dimQ=1,
             W=None,  # W.shape = [dimV, dimH]
             bv=None,
             bh=None,
@@ -178,8 +179,9 @@ class binRBM(_RBM, object):
             if Q is not None:
                 self._Q = Q
             else:
-                logitQ = tf.get_variable(name='logitQ', shape=dimV, initializer=tf.zeros_initializer)
+                logitQ = tf.get_variable(name='logitQ', shape=[dimQ, dimV], initializer=tf.zeros_initializer)
                 self._Q = tf.nn.sigmoid(logitQ)
+                self._dimQ = dimQ
 
     """#########################################################################
     sampleVgivenH: the generative direction of the RBM.
@@ -226,6 +228,7 @@ class binRBM(_RBM, object):
                 Q. If we are going to introduce complicated model like VAE to be
                 the proposal. We should define the lower bound outer the class.
     input: V - the latent state, could be [batch, steps, dimV]/[batch, dimV].
+           samplesteps - the number of sample to be drawn. Default is 1.
            W - the weight matrix provided by outer network. Using default one if
                None.
            bv - the visible bias provided by outer network. Using default one if
@@ -236,7 +239,7 @@ class binRBM(_RBM, object):
                default one if None.
     output: the average free energy per bit in tensor.
     #########################################################################"""
-    def LowerBound(self, V, W=None, bv=None, bh=None, Q=None):
+    def LowerBound(self, V, samplesteps=1, W=None, bv=None, bh=None, Q=None):
         Wt = W if W is not None else self._W
         # the shape of bvt could be [dimV] or [batch, steps, dimV] in RNNRBM.
         bvt = bv if bv is not None else self._bv
@@ -244,7 +247,13 @@ class binRBM(_RBM, object):
         bht = bv if bh is not None else self._bh
         # the proposal distribution Q and in the binRBM it's a simple Bernoulli distribution.
         Qt = Q if Q is not None else self._Q
-
+        # generate samples first.
+        K = np.random.multinomial(n=1, pvals=[1/self._dimQ]*self._dimQ)
+        samples = tf.distributions.Bernoulli(probs=Qt[K]).sample([samplesteps])
+        # negative phase/Bit.
+        negPhase = self.FreeEnergy(samples, Wt, bvt, bht)
+        # positive phase/Bit.
+        posPhase = self.FreeEnergy(V, Wt, bvt, bht)
 
 
 

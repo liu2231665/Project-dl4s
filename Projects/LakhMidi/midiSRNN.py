@@ -13,7 +13,7 @@ import os
 
 Config.Opt = 'SGD'
 Config.unitType = 'GRU'
-Config.mode = 'smooth'
+Config.mode = 'filter'
 Config.dimRecD = [500]
 Config.dimRecA = [500]
 Config.dimEnc = [400]
@@ -22,9 +22,9 @@ Config.dimMLPx = [400]
 Config.dimInput = 128
 Config.dimState = 500
 Config.init_scale = 0.01
-Config.eventPath = './binSRNN-s/'
-Config.savePath = './binSRNN-s/'
-SAVETO = './binSRNN-s/historyMidiSRNN-s.npz'
+Config.eventPath = './binSRNN-f/'
+Config.savePath = './binSRNN-f/'
+SAVETO = './binSRNN-f/historyMidiSRNN-f.npz'
 
 Flag = 'training'                       # {'training'/'evaluation'}
 
@@ -37,7 +37,7 @@ if __name__ == '__main__':
         if not os.path.exists(Config.savePath):
             os.makedirs(Config.savePath)
         # Add the save file name into the save path.
-        Config.savePath = os.path.join(Config.savePath, 'SRNN-s')
+        Config.savePath = os.path.join(Config.savePath, 'SRNN-f')
         # Build the model and prepare the data-set.
         Dataset = fetchData()
         SRNN = binSRNN(Config)
