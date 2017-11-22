@@ -35,6 +35,7 @@ class _RBM(object):
            bh - the hidden bias that maybe provided by outer parts. None in
                default and the RBM will define its own hidden bias.
            scope - using to define the variable_scope.
+           loadPath - the path to load the saved model.
     output: None.
     #########################################################################"""
     def __init__(
@@ -46,8 +47,14 @@ class _RBM(object):
             W=None,             # W.shape = [dimV, dimH]
             bv=None,
             bh=None,
-            scope=None
+            scope=None,
+            loadPath=None,
+            Opt='SGD'
     ):
+        # <Tensorflow Session>.
+        self._sess = tf.Session()
+        # the proposal distribution.
+        self._Q = None
         # Check whether the configuration is correct.
         if x is not None and x.shape[-1] != dimV:
             raise ValueError("You have provided a input tensor but the last shape is not equal to [dimV]!!")
@@ -60,6 +67,7 @@ class _RBM(object):
 
         self._dimV = dimV
         self._dimH = dimH
+        self._loadPath = loadPath
         if scope is None:
             self._scopeName = 'RBM-' + str(np.random.randn())
         else:
@@ -68,18 +76,35 @@ class _RBM(object):
         # create the system parameters.
         initializer = tf.random_uniform_initializer(-init_scale, init_scale)
         with tf.variable_scope(self._scopeName, initializer=initializer):
+            #
             self._W = W if W is not None else tf.get_variable('W', shape=[dimV, dimH])
             self._bv = bv if bv is not None else tf.get_variable('bv', shape=dimV, initializer=tf.zeros_initializer)
             self._bh = bv if bv is not None else tf.get_variable('bh', shape=dimH, initializer=tf.zeros_initializer)
             # if the RBM component is used to build sequential models like RNN-RBM, the input x should be provided as
-            # x = [batch, steps, frame]. O.w, we define it as non-temporal data with shape [batch,frame].
+            # x = [batch, frame]. O.w, we define it as non-temporal data with shape [batch,frame].
             self._V = x if x is not None else tf.placeholder(dtype=tf.float32, shape=[None, dimV], name='V')
             # <tensor placeholder> learning rate.
             self.lr = tf.placeholder(dtype='float32', shape=(), name='learningRate')
+            # the loss per bit.
+            self._loss = None
+            # the updating step.
+            self._train_step = None
+            # <Tensorflow Optimizer>.
+            if Opt == 'Adadelta':
+                self._optimizer = tf.train.AdadeltaOptimizer(learning_rate=self.lr)
+            elif Opt == 'Adam':
+                self._optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
+            elif Opt == 'Momentum':
+                self._optimizer = tf.train.MomentumOptimizer(self.lr, 0.9)
+            elif Opt == 'SGD':
+                self._optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.lr)
+            else:
+                raise (ValueError("Config.Opt should be either 'Adadelta', 'Adam', 'Momentum' or 'SGD'!"))
+
 
     """#########################################################################
     sampleHgivenV: the inference direction of the RBM.
-    input: V - the input vector, could be [batch, steps, frame]/[batch, frame].
+    input: V - the input vector, could be [batch, dimV].
            W - the weight matrix provided by outer network. Using default one if
                None.
            bh - the hidden bias provided by outer network. Using default one if
@@ -90,14 +115,14 @@ class _RBM(object):
     def sampleHgivenV(self, V, W=None, bh=None):
         Wt = W if W is not None else self._W
         bht = bh if bh is not None else self._bh
-        # shape of tensordot = [batch, steps, dimH]/[batch, dimH]
+        # shape of tensordot = [batch, dimH]
         Ph_v = tf.nn.sigmoid(tf.tensordot(V, Wt, [[-1], [0]]) + bht)
         newH = tf.distributions.Bernoulli(probs=Ph_v, dtype=tf.float32).sample()
         return newH, Ph_v
 
     """#########################################################################
     sampleVgivenH: the generative direction of the RBM.
-    input: H - the latent state, could be [batch, steps, frame]/[batch, frame].
+    input: H - the latent state, could be [batch, dimH].
            W - the weight matrix provided by outer network. Using default one if
                None.
            bv - the visible bias provided by outer network. Using default one if
@@ -109,7 +134,7 @@ class _RBM(object):
 
     """#########################################################################
     GibbsSampling: Gibbs sampling.
-    input: V - the input vector, could be [batch, steps, frame]/[batch, frame].
+    input: V - the input vector, could be [batch, dimV].
            W - the weight matrix provided by outer network. Using default one if
                None.
            bv - the visible bias provided by outer network. Using default one if
@@ -133,6 +158,100 @@ class _RBM(object):
             if newV is None:
                 raise ValueError("You have not yet define the sampleVgivenH!!")
         return newV, newH, Ph_v, Pv_h
+
+    """#########################################################################
+    train_function: compute the loss and update the tensor variables.
+    input: input - numerical input with shape [batch, dimV].
+           lrate - <scalar> learning rate.
+    output: the loss value.
+    #########################################################################"""
+    def train_function(self, input, lrate):
+        _, loss_value = self._sess.run([self._train_step, self._loss],
+                                       feed_dict={self._V: input, self.lr: lrate})
+        return loss_value
+
+    """#########################################################################
+    FreeEnergy: the free energy function.
+    input: V - the latent state, could be [batch, dimV].
+           W - the weight matrix provided by outer network. Using default one if
+               None.
+           bv - the visible bias provided by outer network. Using default one if
+                None.
+           bh - the hidden bias provided by outer network. Using default one if
+                None.
+    output: the average free energy per frame with shape [batch]
+    #########################################################################"""
+    def FreeEnergy(self, V, W=None, bv=None, bh=None):
+        return
+
+    """#########################################################################
+    ComputeLoss: define the loss of the log-likelihood with given proposal
+                Q. If we are going to introduce complicated model like VAE to be
+                the proposal. We should define the lower bound outer the class.
+    input: V - the latent state, could be [batch, dimV].
+           samplesteps - the number of sample to be drawn. Default is 1.
+           W - the weight matrix provided by outer network. Using default one if
+               None.
+           bv - the visible bias provided by outer network. Using default one if
+                None.
+           bh - the hidden bias provided by outer network. Using default one if
+                None.
+    output: the average loss per frame in tensor.
+    #########################################################################"""
+    def ComputeLoss(self, V, samplesteps=10, W=None, bv=None, bh=None):
+        Wt = W if W is not None else self._W
+        # the shape of bvt could be [dimV].
+        bvt = bv if bv is not None else self._bv
+        # the shape of bvt could be [dimH].
+        bht = bv if bh is not None else self._bh
+        # samples.shape = [batch, dimV].
+        samples, _, _, _ = self.GibbsSampling(V=V, k=samplesteps)
+        # negative phase with shape [samples].
+        negPhase = tf.reduce_mean(self.FreeEnergy(samples, Wt, bvt, bht))
+        # positive phase with shape [batch].
+        posPhase = tf.reduce_mean(self.FreeEnergy(V, Wt, bvt, bht))
+        return posPhase - negPhase
+
+    """#########################################################################
+    _runSession: initialize the graph or restore from the load path.
+    input: None.
+    output: None.
+    #########################################################################"""
+    def _runSession(self):
+        if self._loadPath is None:
+            self._sess.run(tf.global_variables_initializer())
+        else:
+            saver = tf.train.Saver()
+            saver.restore(self._sess, self._loadPath)
+        return
+
+    """#########################################################################
+    saveModel:save the trained model into disk.
+    input: savePath - another saving path, if not provide, use the default path.
+    output: None
+    #########################################################################"""
+    def saveModel(self, savePath=None):
+        # Create a saver.
+        saver = tf.train.Saver()
+        saver.save(self._sess, savePath)
+        return
+
+    """#########################################################################
+    loadModel:load the model from disk.
+    input: loadPath - another loading path, if not provide, use the default path.
+    output: None
+    #########################################################################"""
+    def loadModel(self, loadPath=None):
+        # Create a saver.
+        saver = tf.train.Saver()
+        if loadPath is None:
+            if self._loadPath is not None:
+                saver.restore(self._sess, self._loadPath)
+            else:
+                raise (ValueError("No loadPath is given!"))
+        else:
+            saver.restore(self._sess, loadPath)
+        return
 
 
 
@@ -165,8 +284,6 @@ class binRBM(_RBM, object):
             dimH,
             init_scale,
             x=None,
-            Q=None,
-            dimQ=1,
             W=None,  # W.shape = [dimV, dimH]
             bv=None,
             bh=None,
@@ -176,16 +293,15 @@ class binRBM(_RBM, object):
         initializer = tf.random_uniform_initializer(-init_scale, init_scale)
         # Define the proposal Q.
         with tf.variable_scope(self._scopeName, initializer=initializer):
-            if Q is not None:
-                self._Q = Q
-            else:
-                logitQ = tf.get_variable(name='logitQ', shape=[dimQ, dimV], initializer=tf.zeros_initializer)
-                self._Q = tf.nn.sigmoid(logitQ)
-                self._dimQ = dimQ
+            # the training loss is per frame.
+            self._loss = self.ComputeLoss(V=self._V)
+            self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+            self._train_step = self._optimizer.minimize(self._loss)
+            self._runSession()
 
     """#########################################################################
     sampleVgivenH: the generative direction of the RBM.
-    input: H - the latent state, could be [batch, steps, frame]/[batch, frame].
+    input: H - the latent state, could be [batch, dimH].
            W - the weight matrix provided by outer network. Using default one if
                None.
            bv - the visible bias provided by outer network. Using default one if
@@ -196,38 +312,38 @@ class binRBM(_RBM, object):
     def sampleVgivenH(self, H, W=None, bv=None):
         Wt = W if W is not None else self._W
         bvt = bv if bv is not None else self._bv
-        # shape of tensordot = [batch, steps, dimH]/[batch, dimH]
+        # shape of tensordot = [batch, dimH]
         Pv_h = tf.nn.sigmoid(tf.tensordot(H, tf.transpose(Wt), [[-1], [0]]) + bvt)
         newV = tf.distributions.Bernoulli(probs=Pv_h, dtype=tf.float32).sample()
         return newV, Pv_h
 
     """#########################################################################
     FreeEnergy: the free energy function.
-    input: V - the latent state, could be [batch, steps, dimV]/[batch, dimV].
+    input: V - the latent state, could be [batch, dimV].
            W - the weight matrix provided by outer network. Using default one if
                None.
            bv - the visible bias provided by outer network. Using default one if
                 None.
            bh - the hidden bias provided by outer network. Using default one if
                 None.
-    output: the average free energy per bit in tensor.
+    output: the average free energy per frame with shape [batch]
     #########################################################################"""
     def FreeEnergy(self, V, W=None, bv=None, bh=None):
         Wt = W if W is not None else self._W
-        # the shape of bvt could be [dimV] or [batch, steps, dimV] in RNNRBM.
+        # the shape of bvt could be [dimV].
         bvt = bv if bv is not None else self._bv
-        # the shape of bvt could be [dimH] or [batch, steps, dimH] in RNNRBM.
-        bht = bv if bh is not None else self._bh
+        # the shape of bvt could be [dimH].
+        bht = bh if bh is not None else self._bh
         #
-        term1 = tf.tensordot(bvt, V, [[-1], [-1]])
+        term1 = V * bvt
         term2 = tf.nn.softplus(tf.tensordot(V, Wt, [[-1], [0]]) + bht)
-        return tf.reduce_mean(term1) + tf.reduce_mean(term2)
+        return -tf.reduce_sum(term1, axis=-1) - tf.reduce_sum(term2, axis=-1)
 
     """#########################################################################
-    LowerBound: define the lower bound of the log-likelihood with given proposal
+    ComputeLoss: define the loss of the log-likelihood with given proposal
                 Q. If we are going to introduce complicated model like VAE to be
                 the proposal. We should define the lower bound outer the class.
-    input: V - the latent state, could be [batch, steps, dimV]/[batch, dimV].
+    input: V - the latent state, could be [batch, dimV].
            samplesteps - the number of sample to be drawn. Default is 1.
            W - the weight matrix provided by outer network. Using default one if
                None.
@@ -235,25 +351,17 @@ class binRBM(_RBM, object):
                 None.
            bh - the hidden bias provided by outer network. Using default one if
                 None.
-           Q - the proposal distribution Q provided by outer network. Using 
-               default one if None.
-    output: the average free energy per bit in tensor.
+    output: the average loss per frame in tensor.
     #########################################################################"""
-    def LowerBound(self, V, samplesteps=1, W=None, bv=None, bh=None, Q=None):
+    def AIS(self, run=100, steps=100, W=None, bv=None, bh=None):
         Wt = W if W is not None else self._W
-        # the shape of bvt could be [dimV] or [batch, steps, dimV] in RNNRBM.
+        # the shape of bvt could be [dimV].
         bvt = bv if bv is not None else self._bv
-        # the shape of bvt could be [dimH] or [batch, steps, dimH] in RNNRBM.
+        # the shape of bvt could be [dimH].
         bht = bv if bh is not None else self._bh
-        # the proposal distribution Q and in the binRBM it's a simple Bernoulli distribution.
-        Qt = Q if Q is not None else self._Q
-        # generate samples first.
-        K = np.random.multinomial(n=1, pvals=[1/self._dimQ]*self._dimQ)
-        samples = tf.distributions.Bernoulli(probs=Qt[K]).sample([samplesteps])
-        # negative phase/Bit.
-        negPhase = self.FreeEnergy(samples, Wt, bvt, bht)
-        # positive phase/Bit.
-        posPhase = self.FreeEnergy(V, Wt, bvt, bht)
+        pass
+
+
 
 
 

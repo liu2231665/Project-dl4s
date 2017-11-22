@@ -393,7 +393,6 @@ class gaussSTORN(_STORN, object):
     input: Config - configuration class in ./utility.
     output: None.
     #########################################################################"""
-
     def __init__(
             self,
             configSTORN
