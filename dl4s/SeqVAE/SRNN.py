@@ -23,7 +23,6 @@ class _SRNN(object):
     input: Config - configuration class in ./utility.
     output: None.
     #########################################################################"""
-
     def __init__(
             self,
             config=configSRNN()
