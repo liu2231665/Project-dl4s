@@ -620,6 +620,7 @@ def buildSRNN(
                 backwardCell = buildRec(Config.dimRecA, Config.recType, Config.init_scale)
                 state = backwardCell.zero_state(tf.shape(x)[0], dtype=tf.float32)
                 a_t, _ = tf.nn.dynamic_rnn(backwardCell, tf.reverse(tf.concat(axis=-1, values=(d_t, x)), [1]), initial_state=state)
+                a_t = tf.reverse(a_t, [1])
             elif Config.mode == 'filter':
                 backwardCell = MLP(Config.init_scale, Config.dimRecD[-1] + Config.dimInput,
                                    Config.dimRecA, Config.mlpType)

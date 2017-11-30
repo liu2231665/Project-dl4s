@@ -10,8 +10,10 @@ Descriptions: the file contains the utility of RBM including Gibbs sampling,
 class configRNNRBM:
     aisRun = 100        # <scalar> the number of samples of AIS.
     aisLevel = 10       # <scalar> the number of intermediate proposal distributions of AIS.
-    Gibbs = 1           # <scalar> the steps of Gibbs sampling.
+    Gibbs = 15          # <scalar> the steps of Gibbs sampling.
     recType = 'LSTM'
+    mlpType = 'relu'
+    dimMlp = []
     dimRec = []
     dimInput = 100      # <scalar> the size of frame of the input.
     dimState = 100      # <scalar> the size of the stochastic layer.

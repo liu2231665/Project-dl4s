@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
     X = dict()
-    X = np.random.binomial(1, 0.5, size=(100, 40, 200))
+    X = np.random.binomial(1, 0.5, size=(100, 250, 200))
     Config = configSRNN()
     Config.Opt = 'SGD'
     mode = 'smooth'

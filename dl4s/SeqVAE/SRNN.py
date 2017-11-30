@@ -5,7 +5,7 @@ Institute: Stony Brook University
 Descriptions: the file contains the model description of SRNN.
               ----2017.11.15
 #########################################################################"""
-from dl4s.tools import GaussKL, BernoulliNLL
+from dl4s.tools import GaussKL, BernoulliNLL, GaussNLL
 from dl4s.SeqVAE import configSRNN
 from dl4s.SeqVAE.utility import buildSRNN
 import tensorflow as tf
@@ -304,7 +304,7 @@ class _SRNN(object):
 
 
 """#########################################################################
-Class: _SRNN - the SRNN model for stochastic binary inputs..
+Class: binSRNN - the SRNN model for stochastic binary inputs..
 #########################################################################"""
 class binSRNN(_SRNN, object):
     """#########################################################################
@@ -337,8 +337,60 @@ class binSRNN(_SRNN, object):
         return self._sess.run(tf.distributions.Bernoulli(probs=self._dec, dtype=tf.float32).sample(),
                               feed_dict={self.x: X})[0]
 
+    """#########################################################################
+    output_function: reconstruction function.
+    input: input - .
+    output: should be the reconstruction represented by the probability.
+    #########################################################################"""
+    def output_function(self, input):
+        with self._graph.as_default():
+            return self._sess.run(self._dec, feed_dict={self.x: input})
+
 """#########################################################################
-Class: _SRNN - .
+Class: gaussSRNN - the SRNN model for stochastic continuous inputs.
 #########################################################################"""
 class gaussSRNN(_SRNN, object):
-    pass
+    """#########################################################################
+    __init__:the initialization function.
+    input: Config - configuration class in ./utility.
+    output: None.
+    #########################################################################"""
+    def __init__(
+            self,
+            config=configSRNN
+    ):
+        super().__init__(config)
+        with self._graph.as_default():
+            with tf.variable_scope('output'):
+                # compute the mean and standard deviation of P(X|Z).
+                Wdec_mu = tf.get_variable('Wdec_mu', shape=(self._hidden_dec.shape[-1], config.dimInput))
+                bdec_mu = tf.get_variable('bdec_mu', shape=config.dimInput, initializer=tf.zeros_initializer)
+                mu = tf.tensordot(self._hidden_dec, Wdec_mu, [[-1], [0]]) + bdec_mu
+                Wdec_sig = tf.get_variable('Wdec_sig', shape=(self._hidden_dec.shape[-1], config.dimInput))
+                bdec_sig = tf.get_variable('bdec_sig', shape=config.dimInput, initializer=tf.zeros_initializer)
+                std = tf.nn.softplus(tf.tensordot(self._hidden_dec, Wdec_sig, [[-1], [0]]) + bdec_sig) + 1e-8
+                self._dec = [mu, std]
+
+                self._loss += GaussNLL(self.x, mu, std ** 2)
+                self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+                self._train_step = self._optimizer.minimize(tf.cast(tf.shape(self.x), tf.float32)[-1] * self._loss)
+                self._runSession()
+
+    """#########################################################################
+    gen_function: generate samples.
+    input: numSteps - the length of the sample sequence.
+    output: should be the sample.
+    #########################################################################"""
+    def gen_function(self, numSteps):
+        X = np.zeros((1, numSteps, self._dimInput))
+        return self._sess.run(tf.distributions.Normal(loc=self._dec[0], scale=self._dec[1]).sample(),
+                              feed_dict={self.x: X})[0]
+
+    """#########################################################################
+    output_function: reconstruction function.
+    input: input - .
+    output: should be the reconstruction represented by the probability.
+    #########################################################################"""
+    def output_function(self, input):
+        mean, std = self._sess.run(self._dec, feed_dict={self.x: input})
+        return mean, std
