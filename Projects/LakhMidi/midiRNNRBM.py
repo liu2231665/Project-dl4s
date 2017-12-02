@@ -1,7 +1,7 @@
 """#########################################################################
 Author: Yingru Liu
 Institute: Stony Brook University
-Descriptions: the code to train and run the binRNNRBM from dl4s.seqVAE
+Descriptions: the code to train and run the binRNNRBM from dl4s.TRBM
               under the "Lakh Midi data-set".
               ----2017.11.23
 #########################################################################"""

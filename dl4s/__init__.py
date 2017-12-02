@@ -7,4 +7,4 @@ from dl4s.SeqVAE.VRNN import binVRNN, gaussVRNN
 from dl4s.SeqVAE.SRNN import binSRNN, gaussSRNN
 
 from dl4s.TRBM.utility import configRNNRBM
-from dl4s.TRBM.RnnRBM import binRnnRBM
+from dl4s.TRBM.RnnRBM import binRnnRBM, gaussRnnRBM

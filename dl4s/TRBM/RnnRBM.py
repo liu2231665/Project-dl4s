@@ -61,7 +61,7 @@ class _RnnRBM(object):
             self._rbm = None
             self._train_step = None
             self._nll = None
-            self._pll = None
+            self._monitor = None
         # <Tensorflow Optimizer>.
         if config.Opt == 'Adadelta':
             self._optimizer = tf.train.AdadeltaOptimizer(learning_rate=self.lr)
@@ -161,7 +161,7 @@ class _RnnRBM(object):
     #########################################################################"""
     def train_function(self, input, lrate):
         with self._graph.as_default():
-            _, loss_value = self._sess.run([self._train_step, self._pll],
+            _, loss_value = self._sess.run([self._train_step, self._monitor],
                                            feed_dict={self.x: input, self.lr: lrate})
         return loss_value
 
@@ -172,7 +172,7 @@ class _RnnRBM(object):
     #########################################################################"""
     def val_function(self, input):
         with self._graph.as_default():
-            loss_value = self._sess.run(self._pll, feed_dict={self.x: input})
+            loss_value = self._sess.run(self._nll, feed_dict={self.x: input})
         return loss_value
 
     """#########################################################################
@@ -192,7 +192,7 @@ class _RnnRBM(object):
            gibbs - the number of gibbs sampling.
     output: should be the sample.
     #########################################################################"""
-    def gen_function(self, x, numSteps=None, gibbs=None):
+    def gen_function(self, x=None, numSteps=None, gibbs=None):
         if x is not None:
             sample = x
         elif numSteps is not None:
@@ -349,7 +349,7 @@ class binRnnRBM(_RnnRBM, object):
                                x=self.x, bv=bvt, bh=bht, k=self._gibbs)
             # the training loss is per frame.
             self._loss = self._rbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
-            self._pll = self._rbm._pll
+            self._monitor = self._rbm._pll
             self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel, Batch=tf.shape(self.x)[0],
                                        Seq=tf.shape(self.x)[1])
             self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
@@ -389,9 +389,19 @@ class gaussRnnRBM(_RnnRBM, object):
                 bvt = tf.tensordot(dt, Wdv, [[-1], [0]]) + bv
                 bht = tf.tensordot(dt, Wdh, [[-1], [0]]) + bh
                 Wstd = tf.get_variable('Wstd', shape=[config.dimRec[-1], config.dimInput])
-                bstd = tf.get_variable('bstd', shape=config.dimState, initializer=tf.zeros_initializer)
+                bstd = tf.get_variable('bstd', shape=config.dimInput, initializer=tf.zeros_initializer)
                 stdt = tf.tensordot(dt, Wstd, [[-1], [0]]) + bstd
                 self._rbm = gaussRBM(dimV=config.dimInput, dimH=config.dimState, init_scale=config.init_scale,
                                    x=self.x, bv=bvt, bh=bht, std=stdt, k=self._gibbs)
+            # the training loss is per frame.
+            self._loss = self._rbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
+            self._monitor = self._rbm._monitor
+            self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel, Batch=tf.shape(self.x)[0],
+                                       Seq=tf.shape(self.x)[1])
+            self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
+            self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+            self._train_step = self._optimizer.minimize(self._loss)
+            self._runSession()
+            pass
 
 

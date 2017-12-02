@@ -316,7 +316,20 @@ class gaussRBM(_RBM, object):
             self._std = std if std is not None else tf.get_variable('std', shape=dimV, initializer=tf.zeros_initializer)
             # pll.
             _, _, _, muV = self.GibbsSampling(self._V, beta=1.0, k=self._k)
-            self._pll = dimV * GaussNLL(x=self._V, mean=muV, sigma=tf.nn.softplus(self._std))
+            self._monitor = tf.reduce_mean(tf.reduce_sum((self._V - muV)**2, axis=[-1]))
+
+    """#########################################################################
+    sampleHgivenV: the inference direction of the RBM.
+    input: V - the input vector, could be [batch, dimV].
+           beta - a scaling factor for AIS.
+    output: newH - the new binary latent states sampled from P(H|V).
+            Ph_v - the Bernoulli distribution P(H|V), which is also mean(H|V).
+    #########################################################################"""
+    def sampleHgivenV(self, V, beta=1.0):
+        # shape of tensordot = [batch, dimH]
+        Ph_v = tf.nn.sigmoid(tf.tensordot(V/(tf.nn.softplus(self._std)**2 + 1e-8), beta * self._W, [[-1], [0]]) + self._bh)
+        newH = tf.distributions.Bernoulli(probs=Ph_v, dtype=tf.float32).sample()
+        return newH, Ph_v
 
     """#########################################################################
     sampleVgivenH: the generative direction of the RBM.
@@ -338,8 +351,8 @@ class gaussRBM(_RBM, object):
     output: the average free energy per frame with shape [batch]
     #########################################################################"""
     def FreeEnergy(self, V, beta=1.0):
-        term1 = (V - self._bv)**2 / (2 * tf.nn.softplus(self._std)**2)
-        term2 = tf.nn.softplus(tf.tensordot(V, beta * self._W/tf.nn.softplus(self._std)**2, [[-1], [0]]) + self._bh)
+        term1 = (V - self._bv)**2 / (2 * tf.nn.softplus(self._std)**2 + 1e-8)
+        term2 = tf.nn.softplus(tf.tensordot(V/(tf.nn.softplus(self._std)**2 + 1e-8), beta * self._W, [[-1], [0]]) + self._bh)
         return tf.reduce_sum(term1, axis=-1) - tf.reduce_sum(term2, axis=-1)
 
     """#########################################################################
@@ -353,7 +366,8 @@ class gaussRBM(_RBM, object):
     #########################################################################"""
     def AIS(self, run=10, levels=10, Batch=None, Seq=None):
         # proposal partition function with shape []/[...].
-        logZA = tf.reduce_sum(tf.nn.softplus(self._bv), axis=-1) + \
+        logZA_term1 = 0.5 * tf.log(2*np.pi) + tf.log(tf.nn.softplus(self._std))
+        logZA = tf.reduce_sum(logZA_term1, axis=-1) + \
                 tf.reduce_sum(tf.nn.softplus(self._bh), axis=-1)
         if Batch is not None and Seq is None:
             sample = tf.ones(shape=[run, Batch, self._dimV])

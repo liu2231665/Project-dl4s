@@ -1,8 +1,8 @@
 """#########################################################################
 Author: Yingru Liu
 Institute: Stony Brook University
-Descriptions: the code to train and run the gaussSTORN from dl4s.autoregRNN
-              under the "Blizzard 2013 data-set".
+Descriptions: the code to train and run the STORN
+              under the "Audio Effect".
               ----2017.11.03
 #########################################################################"""
 from dl4s import gaussSTORN

@@ -1,8 +1,8 @@
 """#########################################################################
 Author: Yingru Liu
 Institute: Stony Brook University
-Descriptions: the code to train and run the gaussSRNN from dl4s.SeqVAE
-              under the "Blizzard 2013 data-set".
+Descriptions: the code to train and run the SRNN
+              under the "Audio Effect".
               ----2017.11.28
 #########################################################################"""
 from dl4s import gaussSRNN
