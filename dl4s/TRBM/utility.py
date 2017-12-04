@@ -23,3 +23,4 @@ class configRNNRBM:
     savePath = None     # <string/None> the path to save the model.
     eventPath = None    # <string/None> the path to save the events for visualization.
     loadPath = None     # <string/None> the path to load the model.
+    W_Norm=False

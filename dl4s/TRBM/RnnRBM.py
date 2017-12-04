@@ -373,6 +373,7 @@ class gaussRnnRBM(_RnnRBM, object):
             config=configRNNRBM()
     ):
         super().__init__(config)
+        self._W_Norm = config.W_Norm
         with self._graph.as_default():
             # d_t = [batch, steps, hidden]
             self._mlp = MLP(config.init_scale, config.dimInput, config.dimMlp, config.mlpType)
@@ -388,9 +389,11 @@ class gaussRnnRBM(_RnnRBM, object):
                 Wdh = tf.get_variable('Wdh', shape=[config.dimRec[-1], config.dimState])
                 bvt = tf.tensordot(dt, Wdv, [[-1], [0]]) + bv
                 bht = tf.tensordot(dt, Wdh, [[-1], [0]]) + bh
-                Wstd = tf.get_variable('Wstd', shape=[config.dimRec[-1], config.dimInput])
-                bstd = tf.get_variable('bstd', shape=config.dimInput, initializer=tf.zeros_initializer)
-                stdt = tf.tensordot(dt, Wstd, [[-1], [0]]) + bstd
+                # try to learn time variant bias... But fail...
+                # Wstd = tf.get_variable('Wstd', shape=[config.dimRec[-1], config.dimInput])
+                # bstd = tf.get_variable('bstd', shape=config.dimInput, initializer=tf.zeros_initializer)
+                # stdt = tf.tensordot(dt, Wstd, [[-1], [0]]) + bstd
+                stdt = 0.5 * tf.ones(shape=config.dimInput)
                 self._rbm = gaussRBM(dimV=config.dimInput, dimH=config.dimState, init_scale=config.init_scale,
                                    x=self.x, bv=bvt, bh=bht, std=stdt, k=self._gibbs)
             # the training loss is per frame.
@@ -401,7 +404,23 @@ class gaussRnnRBM(_RnnRBM, object):
             self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(self._loss)
+            def scaleW():
+                Wnorm = tf.sqrt(tf.reduce_sum(self._rbm._W**2, axis=0))
+                scale = tf.maximum(tf.constant(1.0), Wnorm)
+                return tf.assign(self._rbm._W, scale * self._rbm._W / Wnorm)
+            self._scaleW = scaleW()
             self._runSession()
-            pass
 
-
+    """#########################################################################
+    train_function: compute the monitor and update the tensor variables.
+    input: input - numerical input.
+           lrate - <scalar> learning rate.
+    output: the pseudo log-likelihood value.
+    #########################################################################"""
+    def train_function(self, input, lrate):
+        with self._graph.as_default():
+            _, loss_value = self._sess.run([self._train_step, self._monitor],
+                                           feed_dict={self.x: input, self.lr: lrate})
+            if self._W_Norm:
+                value = self._sess.run(self._scaleW)
+        return loss_value
