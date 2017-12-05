@@ -25,7 +25,7 @@ Config.eventPath = './binRNNRBM/'
 Config.savePath = './binRNNRBM/'
 SAVETO = './binRNNRBM/historyMidiRNNRBM.npz'
 
-Flag = 'evaluation'                       # {'training'/'evaluation'}
+Flag = 'training'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
     if Flag == 'training':
@@ -40,7 +40,7 @@ if __name__ == '__main__':
         # Build the model and prepare the data-set.
         Dataset = fetchData()
         RnnRbm = binRnnRBM(Config)
-        RnnRbm.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.01,
+        RnnRbm.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.1,
                           valid_batchSize=25, saveto=SAVETO)
 
     if Flag == 'evaluation':

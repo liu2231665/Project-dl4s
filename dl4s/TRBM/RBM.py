@@ -509,9 +509,9 @@ class mu_ssRBM(object):
                 self._phi = phi
             else:
                 if phiTrain:
-                    _phi = tf.get_variable('phi', shape=(self._dimH, self._dimV)) \
-                     + tf.transpose(self._W**2 / (self._alpha + 1e-8)) * self._dimV
-                    self._phi = tf.stop_gradient(_phi)
+                    term = tf.transpose(self._W**2 / (self._alpha + 1e-8)) * self._dimV
+                    self._phi = tf.get_variable('phi', shape=(self._dimH, self._dimV)) \
+                                + tf.stop_gradient(term)
                 else:
                     self._phi = tf.zeros(shape=(self._dimH, self._dimV), name='phi') / self._dimH
             # x = [batch, steps, dimV]. O.w, we define it as non-temporal data with shape [batch,dimV].
@@ -656,4 +656,5 @@ class mu_ssRBM(object):
 
     # TODO: add constraint on W to make it's column's norm smaller than 1.
     def add_constraint(self):
+        Wnorm = tf.norm(self._W, axis=[0])
         return

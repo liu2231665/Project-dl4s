@@ -172,7 +172,7 @@ class _RnnRBM(object):
     #########################################################################"""
     def val_function(self, input):
         with self._graph.as_default():
-            loss_value = self._sess.run(self._nll, feed_dict={self.x: input})
+            loss_value = self._sess.run(self._monitor, feed_dict={self.x: input})
         return loss_value
 
     """#########################################################################
