@@ -236,13 +236,13 @@ class binRBM(_RBM, object):
         logZA = tf.reduce_sum(tf.nn.softplus(self._bv), axis=-1) + \
                 tf.reduce_sum(tf.nn.softplus(self._bh), axis=-1)
         if Batch is not None and Seq is None:
-            sample = tf.ones(shape=[run, Batch, self._dimV])
+            sample = tf.zeros(shape=[run, Batch, self._dimV])
         elif Batch is None and Seq is not None:
-            sample = tf.ones(shape=[run, Seq, self._dimV])
+            sample = tf.zeros(shape=[run, Seq, self._dimV])
         elif Batch is not None and Seq is not None:
-            sample = tf.ones(shape=[run, Batch, Seq, self._dimV])
+            sample = tf.zeros(shape=[run, Batch, Seq, self._dimV])
         else:
-            sample = tf.ones(shape=[run, self._dimV])
+            sample = tf.zeros(shape=[run, self._dimV])
         # Define the intermediate levels.
         betas = np.random.rand(levels)
         betas.sort()
@@ -371,13 +371,13 @@ class gaussRBM(_RBM, object):
         logZA = tf.reduce_sum(logZA_term1, axis=-1) + \
                 tf.reduce_sum(tf.nn.softplus(self._bh), axis=-1)
         if Batch is not None and Seq is None:
-            sample = tf.ones(shape=[run, Batch, self._dimV])
+            sample = tf.zeros(shape=[run, Batch, self._dimV])
         elif Batch is None and Seq is not None:
-            sample = tf.ones(shape=[run, Seq, self._dimV])
+            sample = tf.zeros(shape=[run, Seq, self._dimV])
         elif Batch is not None and Seq is not None:
-            sample = tf.ones(shape=[run, Batch, Seq, self._dimV])
+            sample = tf.zeros(shape=[run, Batch, Seq, self._dimV])
         else:
-            sample = tf.ones(shape=[run, self._dimV])
+            sample = tf.zeros(shape=[run, self._dimV])
         # Define the intermediate levels.
         betas = np.random.rand(levels)
         betas.sort()
@@ -488,12 +488,14 @@ class mu_ssRBM(object):
             self._bv = bv if bv is not None else tf.get_variable('bv', shape=dimV, initializer=tf.zeros_initializer)
             self._bh = bh if bh is not None else tf.get_variable('bh', shape=dimH, initializer=tf.zeros_initializer)
             #
-            self._gamma = gamma if gamma is not None else tf.get_variable('gamma', shape=self._dimV, initializer=tf.zeros_initializer)
+            self._gamma = gamma if gamma is not None else \
+                tf.nn.relu(tf.get_variable('gamma', shape=self._dimV, initializer=tf.zeros_initializer))
             if alpha is not None:
                 self._alpha = alpha
             else:
                 if alphaTrain:
-                    self._alpha = tf.get_variable('alpha', shape=self._dimS, initializer=tf.ones_initializer)
+                    self._alpha = tf.nn.relu(tf.get_variable('alpha', shape=self._dimS,
+                                                             initializer=tf.ones_initializer))
                 else:
                     self._alpha = tf.ones(shape=self._dimS, name='alpha')
             #
@@ -510,7 +512,7 @@ class mu_ssRBM(object):
             else:
                 if phiTrain:
                     term = tf.transpose(self._W**2 / (self._alpha + 1e-8)) * self._dimV
-                    self._phi = tf.get_variable('phi', shape=(self._dimH, self._dimV)) \
+                    self._phi = tf.nn.relu(tf.get_variable('phi', shape=(self._dimH, self._dimV))) \
                                 + tf.stop_gradient(term)
                 else:
                     self._phi = tf.zeros(shape=(self._dimH, self._dimV), name='phi') / self._dimH
@@ -528,10 +530,8 @@ class mu_ssRBM(object):
     #########################################################################"""
     def sampleHgivenV(self, V, beta=1.0):
         factorV = tf.tensordot(V, beta * self._W, [[-1], [0]])  # shape = [..., dimH]
-        # add the PD constraint on alpha
-        Alpha = tf.nn.relu(self._alpha)
-        sqr_term = (0.5 * factorV ** 2) / (Alpha + 1e-8) \
-                   - 0.5 * tf.tensordot(V**2, tf.transpose(self._phi), [[-1], [0]])
+        sqr_term = (0.5 * factorV ** 2) / (self._alpha + 1e-8) \
+                   - 0.5 * tf.tensordot(V**2, beta * tf.transpose(self._phi), [[-1], [0]])
         lin_term = factorV * self._mu
         meanH_v = tf.nn.sigmoid(sqr_term + lin_term + self._bh, name='meanH_v')
         newH = tf.distributions.Bernoulli(probs=meanH_v, dtype=tf.float32).sample()
@@ -546,12 +546,10 @@ class mu_ssRBM(object):
             meanS_vh - the meanS given V, H.
     #########################################################################"""
     def sampleSgivenVH(self, V, H, beta=1.0):
-        # add the PD constraint on alpha
-        Alpha = tf.nn.relu(self._alpha)
         #
-        factorV = tf.tensordot(V, beta * self._W, [[-1], [0]]) / (Alpha + 1e-8) + self._mu                          # shape = [..., dimH]
+        factorV = tf.tensordot(V, beta * self._W, [[-1], [0]]) / (self._alpha + 1e-8) + self._mu                       # shape = [..., dimH]
         meanS_vh = factorV * H
-        newS = tf.distributions.Normal(loc=meanS_vh, scale=1.0 / tf.sqrt(Alpha)
+        newS = tf.distributions.Normal(loc=meanS_vh, scale=1.0 / (tf.sqrt(self._alpha) + 1e-8)
                                        , name='PS_vh').sample()
         return newS, meanS_vh
 
@@ -564,10 +562,8 @@ class mu_ssRBM(object):
             meanV_sh - the meanV given S, H.
     #########################################################################"""
     def sampleVgivenSH(self, S, H, beta=1.0):
-        # add the PD constraint on gamma
-        Gamma = tf.nn.relu(self._gamma)
         # shape = [..., dimV]
-        Cv_sh = 1 / (Gamma + tf.tensordot(H, self._phi, [[-1], [0]]) + 1e-8)
+        Cv_sh = 1 / (self._gamma + tf.tensordot(H, beta * self._phi, [[-1], [0]]) + 1e-8)
         # shape = [..., dimV]
         meanV_sh = Cv_sh * (tf.tensordot(S*H, beta * tf.transpose(self._W), [[-1], [0]])
                             + self._bv)
@@ -604,18 +600,13 @@ class mu_ssRBM(object):
     output: the average free energy per frame with shape [batch]
     #########################################################################"""
     def FreeEnergy(self, V, beta=1.0):
-        # add the PD constraint on alpha
-        Alpha = tf.nn.relu(self._alpha)
-        # add the PD constraint on gamma
-        Gamma = tf.nn.relu(self._gamma)
-
-        sqr_term = 0.5 * tf.tensordot(V**2, Gamma, [[-1], [0]])
+        sqr_term = 0.5 * tf.tensordot(V**2, self._gamma, [[-1], [0]])
         lin_term = tf.tensordot(V, self._bv, [[-1], [0]])
-        con_term = 0.5 * tf.reduce_sum(tf.log(2*np.pi/(Alpha + 1e-8)))
+        con_term = 0.5 * tf.reduce_sum(tf.log(2*np.pi/(self._alpha + 1e-8)))
         #
         factorV = tf.tensordot(V, beta * self._W, [[-1], [0]])  # shape = [..., dimH]
-        sqr_term_h = (0.5 * factorV ** 2) / (Alpha + 1e-8) \
-                   - 0.5 * tf.tensordot(V ** 2, tf.transpose(self._phi), [[-1], [0]])
+        sqr_term_h = (0.5 * factorV ** 2) / (self._alpha + 1e-8) \
+                   - 0.5 * tf.tensordot(V ** 2, tf.transpose(beta * self._phi), [[-1], [0]])
         lin_term_h = factorV * self._mu
         splus_term = tf.reduce_sum(tf.nn.softplus(sqr_term_h + lin_term_h + self._bh),
                                    axis=[-1])
@@ -639,7 +630,6 @@ class mu_ssRBM(object):
         posPhase = tf.reduce_mean(self.FreeEnergy(V))
         return posPhase - negPhase
 
-    # TODO: finish ais.
     """#########################################################################
     AIS: compute the partition function by annealed importance sampling.
     input: run - the number of samples.
@@ -651,10 +641,52 @@ class mu_ssRBM(object):
     #########################################################################"""
     def AIS(self, run=10, levels=10, Batch=None, Seq=None):
         # proposal partition function with shape []/[...].
-        logZA_term1 = 0.5 * tf.log(2 * np.pi)
-        return
+        logZA_term1 = 0.5 * tf.tensordot(self._bv**2, 1/(self._gamma+1e-8), [[-1], [0]])
+        logZA_term2 = 0.5 * tf.reduce_sum(tf.log(2*np.pi/(self._gamma+1e-8)), axis=[-1])
+        logZA_term3 = 0.5 * tf.reduce_sum(tf.log(2*np.pi/(self._alpha+1e-8)), axis=[-1])
+        logZA_term4 = tf.reduce_sum(tf.nn.softplus(self._bh), axis=-1)
+        logZA = logZA_term1 + logZA_term2 + logZA_term3 + logZA_term4
 
-    # TODO: add constraint on W to make it's column's norm smaller than 1.
+        if Batch is not None and Seq is None:
+            sample = tf.zeros(shape=[run, Batch, self._dimV])
+        elif Batch is None and Seq is not None:
+            sample = tf.zeros(shape=[run, Seq, self._dimV])
+        elif Batch is not None and Seq is not None:
+            sample = tf.zeros(shape=[run, Batch, Seq, self._dimV])
+        else:
+            sample = tf.zeros(shape=[run, self._dimV])
+        # Define the intermediate levels.
+        betas = np.random.rand(levels)
+        betas.sort()
+        sample, _, _, _, _, _ = self.GibbsSampling(V=sample, beta=0.0)
+        # logwk is the weighted matrix.
+        logwk = tf.zeros(shape=tf.shape(sample)[0:-1], dtype=tf.float32)
+        for i in range(len(betas)):
+            sample, _, _, _, _, _ = self.GibbsSampling(V=sample, beta=betas[i])
+            # logp_k, logp_km1 shape [run, ...]
+            logp_k = -self.FreeEnergy(V=sample, beta=betas[i])
+            if i != 0:
+                logp_km1 = -self.FreeEnergy(V=sample, beta=betas[i - 1])
+            else:
+                logp_km1 = -self.FreeEnergy(V=sample, beta=0.0)
+            logwk += logp_k - logp_km1
+        # beta = 1.0
+        sample, _, _, _, _, _ = self.GibbsSampling(V=sample, beta=1.0)
+        logp_k = -self.FreeEnergy(V=sample, beta=1.0)
+        logp_km1 = -self.FreeEnergy(V=sample, beta=betas[-1])
+        logwk += logp_k - logp_km1
+
+        # compute the average weight. [...]
+        log_wk_mean = tf.reduce_mean(logwk, axis=0)
+        r_ais = tf.reduce_mean(tf.exp(logwk - log_wk_mean), axis=0)
+        return logZA + tf.log(r_ais) + log_wk_mean
+
+    """#########################################################################
+    add_constraint: compute the partition function by annealed importance sampling.
+    input: .
+    output: the tensor that assign the normalization to W.
+    #########################################################################"""
     def add_constraint(self):
-        Wnorm = tf.norm(self._W, axis=[0])
-        return
+        Wnorm = tf.stop_gradient(tf.norm(self._W, axis=[0]))
+        mask = tf.maximum(1.0, Wnorm)
+        return tf.assign(self._W, mask * self._W / Wnorm)

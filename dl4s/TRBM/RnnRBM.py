@@ -323,7 +323,6 @@ class binRnnRBM(_RnnRBM, object):
     input: Config - configuration class in ./utility.
     output: None.
     #########################################################################"""
-
     def __init__(
             self,
             config=configRNNRBM()
@@ -424,3 +423,45 @@ class gaussRnnRBM(_RnnRBM, object):
             if self._W_Norm:
                 value = self._sess.run(self._scaleW)
         return loss_value
+
+"""#########################################################################
+Class: ssRNNRBM - the RNNRBM model for stochastic continuous inputs
+                     with spike-and-slab RBM components.
+#########################################################################"""
+class ssRNNRBM(_RnnRBM, object):
+    """#########################################################################
+    __init__:the initialization function.
+    input: Config - configuration class in ./utility.
+    output: None.
+    #########################################################################"""
+    def __init__(
+            self,
+            config=configRNNRBM()
+    ):
+        super().__init__(config)
+        """build the graph"""
+        with self._graph.as_default():
+            # d_t = [batch, steps, hidden]
+            self._mlp = MLP(config.init_scale, config.dimInput, config.dimMlp, config.mlpType)
+            state = self._rnnCell.zero_state(tf.shape(self.x)[0], dtype=tf.float32)
+            d, _ = tf.nn.dynamic_rnn(self._rnnCell, self._mlp(self.x), initial_state=state)
+            paddings = tf.constant([[0, 0], [1, 0], [0, 0]])
+            dt = tf.pad(d[:, 0:-1, :], paddings)
+            initializer = tf.random_uniform_initializer(-config.init_scale, config.init_scale)
+            with tf.variable_scope("ssRBM", initializer=initializer):
+                # in ssRNNRBM, the feedback influences only the bias of H.
+                bh = tf.get_variable('bh', shape=config.dimState, initializer=tf.zeros_initializer)
+                Wdh = tf.get_variable('Wdh', shape=[config.dimRec[-1], config.dimState])
+                bht = tf.tensordot(dt, Wdh, [[-1], [0]]) + bh
+                bvt = tf.zeros(name='bv', shape=config.dimInput)
+                # TODO: build the ssRBM here.
+                pass
+
+
+
+"""#########################################################################
+Class: binssRNNRBM - the RNNRBM model for stochastic binary inputs
+                     with spike-and-slab RBM components.
+#########################################################################"""
+class binssRNNRBM(_RnnRBM, object):
+    pass
