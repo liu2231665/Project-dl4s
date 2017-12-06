@@ -28,3 +28,6 @@ class configRNNRBM:
 
 class configssRNNRBM(configRNNRBM):
     W_Norm = False
+    alphaTrain = False
+    muTrain = False
+    phiTrain = False

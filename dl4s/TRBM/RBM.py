@@ -226,47 +226,40 @@ class binRBM(_RBM, object):
     AIS: compute the partition function by annealed importance sampling.
     input: run - the number of samples.
            levels - the number of intermediate proposals.
-           samplesteps - the number of sample to be drawn. Default is 1.
-           Batch - indicate whether the parameter is batch.
-           Seq - indicate whether the parameter is batch.
     output: the log partition function logZB in tensor.
     #########################################################################"""
-    def AIS(self, run=10, levels=10, Batch=None, Seq=None):
+    def AIS(self, run=10, levels=10):
         # proposal partition function with shape []/[...].
         logZA = tf.reduce_sum(tf.nn.softplus(self._bv), axis=-1) + \
                 tf.reduce_sum(tf.nn.softplus(self._bh), axis=-1)
-        if Batch is not None and Seq is None:
-            sample = tf.zeros(shape=[run, Batch, self._dimV])
-        elif Batch is None and Seq is not None:
-            sample = tf.zeros(shape=[run, Seq, self._dimV])
-        elif Batch is not None and Seq is not None:
-            sample = tf.zeros(shape=[run, Batch, Seq, self._dimV])
-        else:
-            sample = tf.zeros(shape=[run, self._dimV])
+        sample = tf.Variable(tf.zeros(shape=self._dimV), validate_shape=False)
         # Define the intermediate levels.
         betas = np.random.rand(levels)
         betas.sort()
-        sample, _, _, _ = self.GibbsSampling(V=sample, beta=0.0)
+        newV = self.GibbsSampling(V=sample, beta=0.0)[0]
+        tf.assign(sample, tf.stack([newV for i in range(run)]), validate_shape=False)
         # logwk is the weighted matrix.
-        logwk = tf.zeros(shape=tf.shape(sample)[0:-1], dtype=tf.float32)
+        logwk = tf.Variable(tf.zeros(shape=run), validate_shape=False)
+        logp_k = tf.Variable(0.0, validate_shape=False)
+        logp_km1 = tf.Variable(0.0, validate_shape=False)
         for i in range(len(betas)):
-            sample, _, _, _ = self.GibbsSampling(V=sample, beta=betas[i])
+            tf.assign(sample, self.GibbsSampling(V=sample, beta=betas[i])[0], validate_shape=False)
             # logp_k, logp_km1 shape [run, ...]
-            logp_k = -self.FreeEnergy(V=sample, beta=betas[i])
+            tf.assign(logp_k, -self.FreeEnergy(V=sample, beta=betas[i]), validate_shape=False)
             if i != 0:
-                logp_km1 = -self.FreeEnergy(V=sample, beta=betas[i-1])
+                tf.assign(logp_km1, -self.FreeEnergy(V=sample, beta=betas[i - 1]), validate_shape=False)
             else:
-                logp_km1 = -self.FreeEnergy(V=sample, beta=0.0)
-            logwk += logp_k - logp_km1
+                tf.assign(logp_km1, -self.FreeEnergy(V=sample, beta=0.0), validate_shape=False)
+            tf.assign(logwk, logwk + logp_k - logp_km1, validate_shape=False)
         # beta = 1.0
-        sample, _, _, _ = self.GibbsSampling(V=sample, beta=1.0)
-        logp_k = -self.FreeEnergy(V=sample, beta=1.0)
-        logp_km1 = -self.FreeEnergy(V=sample, beta=betas[-1])
-        logwk += logp_k - logp_km1
+        tf.assign(sample, self.GibbsSampling(V=sample, beta=1.0)[0], validate_shape=False)
+        tf.assign(logp_k, -self.FreeEnergy(V=sample, beta=1.0), validate_shape=False)
+        tf.assign(logp_k, -self.FreeEnergy(V=sample, beta=betas[-1]), validate_shape=False)
+        tf.assign(logwk, logwk + logp_k - logp_km1, validate_shape=False)
 
         # compute the average weight. [...]
         log_wk_mean = tf.reduce_mean(logwk, axis=0)
-        r_ais = tf.reduce_mean(tf.exp(logwk-log_wk_mean), axis=0)
+        r_ais = tf.reduce_mean(tf.exp(logwk - log_wk_mean), axis=0)
         return logZA + tf.log(r_ais) + log_wk_mean
 
 
@@ -360,44 +353,37 @@ class gaussRBM(_RBM, object):
     AIS: compute the partition function by annealed importance sampling.
     input: run - the number of samples.
            levels - the number of intermediate proposals.
-           samplesteps - the number of sample to be drawn. Default is 1.
-           Batch - indicate whether the parameter is batch.
-           Seq - indicate whether the parameter is batch.
     output: the log partition function logZB in tensor.
     #########################################################################"""
-    def AIS(self, run=10, levels=10, Batch=None, Seq=None):
+    def AIS(self, run=10, levels=10):
         # proposal partition function with shape []/[...].
         logZA_term1 = 0.5 * tf.log(2*np.pi) + tf.log(tf.nn.softplus(self._std))
         logZA = tf.reduce_sum(logZA_term1, axis=-1) + \
                 tf.reduce_sum(tf.nn.softplus(self._bh), axis=-1)
-        if Batch is not None and Seq is None:
-            sample = tf.zeros(shape=[run, Batch, self._dimV])
-        elif Batch is None and Seq is not None:
-            sample = tf.zeros(shape=[run, Seq, self._dimV])
-        elif Batch is not None and Seq is not None:
-            sample = tf.zeros(shape=[run, Batch, Seq, self._dimV])
-        else:
-            sample = tf.zeros(shape=[run, self._dimV])
+        sample = tf.Variable(tf.zeros(shape=self._dimV), validate_shape=False)
         # Define the intermediate levels.
         betas = np.random.rand(levels)
         betas.sort()
-        sample, _, _, _ = self.GibbsSampling(V=sample, beta=0.0)
+        newV = self.GibbsSampling(V=sample, beta=0.0)[0]
+        tf.assign(sample, tf.stack([newV for i in range(run)]), validate_shape=False)
         # logwk is the weighted matrix.
-        logwk = tf.zeros(shape=tf.shape(sample)[0:-1], dtype=tf.float32)
+        logwk = tf.Variable(tf.zeros(shape=run), validate_shape=False)
+        logp_k = tf.Variable(0.0, validate_shape=False)
+        logp_km1 = tf.Variable(0.0, validate_shape=False)
         for i in range(len(betas)):
-            sample, _, _, _ = self.GibbsSampling(V=sample, beta=betas[i])
+            tf.assign(sample, self.GibbsSampling(V=sample, beta=betas[i])[0], validate_shape=False)
             # logp_k, logp_km1 shape [run, ...]
-            logp_k = -self.FreeEnergy(V=sample, beta=betas[i])
+            tf.assign(logp_k, -self.FreeEnergy(V=sample, beta=betas[i]), validate_shape=False)
             if i != 0:
-                logp_km1 = -self.FreeEnergy(V=sample, beta=betas[i - 1])
+                tf.assign(logp_km1, -self.FreeEnergy(V=sample, beta=betas[i - 1]), validate_shape=False)
             else:
-                logp_km1 = -self.FreeEnergy(V=sample, beta=0.0)
-            logwk += logp_k - logp_km1
+                tf.assign(logp_km1, -self.FreeEnergy(V=sample, beta=0.0), validate_shape=False)
+            tf.assign(logwk, logwk + logp_k - logp_km1, validate_shape=False)
         # beta = 1.0
-        sample, _, _, _ = self.GibbsSampling(V=sample, beta=1.0)
-        logp_k = -self.FreeEnergy(V=sample, beta=1.0)
-        logp_km1 = -self.FreeEnergy(V=sample, beta=betas[-1])
-        logwk += logp_k - logp_km1
+        tf.assign(sample, self.GibbsSampling(V=sample, beta=1.0)[0], validate_shape=False)
+        tf.assign(logp_k, -self.FreeEnergy(V=sample, beta=1.0), validate_shape=False)
+        tf.assign(logp_k, -self.FreeEnergy(V=sample, beta=betas[-1]), validate_shape=False)
+        tf.assign(logwk, logwk + logp_k - logp_km1, validate_shape=False)
 
         # compute the average weight. [...]
         log_wk_mean = tf.reduce_mean(logwk, axis=0)
@@ -435,7 +421,6 @@ class mu_ssRBM(object):
             init_scale,
             x=None,
             W=None,  # W.shape = [dimV, dimH]
-            W_Norm=True,
             bv=None,
             bh=None,
             dimS=None,
@@ -639,42 +624,38 @@ class mu_ssRBM(object):
            Seq - indicate whether the parameter is batch.
     output: the log partition function logZB in tensor.
     #########################################################################"""
-    def AIS(self, run=10, levels=10, Batch=None, Seq=None):
+    def AIS(self, run=10, levels=10):
         # proposal partition function with shape []/[...].
         logZA_term1 = 0.5 * tf.tensordot(self._bv**2, 1/(self._gamma+1e-8), [[-1], [0]])
         logZA_term2 = 0.5 * tf.reduce_sum(tf.log(2*np.pi/(self._gamma+1e-8)), axis=[-1])
         logZA_term3 = 0.5 * tf.reduce_sum(tf.log(2*np.pi/(self._alpha+1e-8)), axis=[-1])
         logZA_term4 = tf.reduce_sum(tf.nn.softplus(self._bh), axis=-1)
         logZA = logZA_term1 + logZA_term2 + logZA_term3 + logZA_term4
-
-        if Batch is not None and Seq is None:
-            sample = tf.zeros(shape=[run, Batch, self._dimV])
-        elif Batch is None and Seq is not None:
-            sample = tf.zeros(shape=[run, Seq, self._dimV])
-        elif Batch is not None and Seq is not None:
-            sample = tf.zeros(shape=[run, Batch, Seq, self._dimV])
-        else:
-            sample = tf.zeros(shape=[run, self._dimV])
+        #
+        sample = tf.Variable(tf.zeros(shape=self._dimV), validate_shape=False)
         # Define the intermediate levels.
         betas = np.random.rand(levels)
         betas.sort()
-        sample, _, _, _, _, _ = self.GibbsSampling(V=sample, beta=0.0)
+        newV = self.GibbsSampling(V=sample, beta=0.0)[0]
+        tf.assign(sample, tf.stack([newV for i in range(run)]), validate_shape=False)
         # logwk is the weighted matrix.
-        logwk = tf.zeros(shape=tf.shape(sample)[0:-1], dtype=tf.float32)
+        logwk = tf.Variable(tf.zeros(shape=run), validate_shape=False)
+        logp_k = tf.Variable(0.0, validate_shape=False)
+        logp_km1 = tf.Variable(0.0, validate_shape=False)
         for i in range(len(betas)):
-            sample, _, _, _, _, _ = self.GibbsSampling(V=sample, beta=betas[i])
+            tf.assign(sample, self.GibbsSampling(V=sample, beta=betas[i])[0], validate_shape=False)
             # logp_k, logp_km1 shape [run, ...]
-            logp_k = -self.FreeEnergy(V=sample, beta=betas[i])
+            tf.assign(logp_k, -self.FreeEnergy(V=sample, beta=betas[i]), validate_shape=False)
             if i != 0:
-                logp_km1 = -self.FreeEnergy(V=sample, beta=betas[i - 1])
+                tf.assign(logp_km1, -self.FreeEnergy(V=sample, beta=betas[i - 1]), validate_shape=False)
             else:
-                logp_km1 = -self.FreeEnergy(V=sample, beta=0.0)
-            logwk += logp_k - logp_km1
+                tf.assign(logp_km1, -self.FreeEnergy(V=sample, beta=0.0), validate_shape=False)
+            tf.assign(logwk, logwk + logp_k - logp_km1, validate_shape=False)
         # beta = 1.0
-        sample, _, _, _, _, _ = self.GibbsSampling(V=sample, beta=1.0)
-        logp_k = -self.FreeEnergy(V=sample, beta=1.0)
-        logp_km1 = -self.FreeEnergy(V=sample, beta=betas[-1])
-        logwk += logp_k - logp_km1
+        tf.assign(sample, self.GibbsSampling(V=sample, beta=1.0)[0], validate_shape=False)
+        tf.assign(logp_k, -self.FreeEnergy(V=sample, beta=1.0), validate_shape=False)
+        tf.assign(logp_k, -self.FreeEnergy(V=sample, beta=betas[-1]), validate_shape=False)
+        tf.assign(logwk, logwk + logp_k - logp_km1, validate_shape=False)
 
         # compute the average weight. [...]
         log_wk_mean = tf.reduce_mean(logwk, axis=0)

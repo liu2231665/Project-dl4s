@@ -5,9 +5,9 @@ Institute: Stony Brook University
 Descriptions: the file contains the model description of RNN-RBM.
               ----2017.11.03
 #########################################################################"""
-from dl4s.TRBM import configRNNRBM
+from dl4s.TRBM import configRNNRBM, configssRNNRBM
 from dl4s.SeqVAE.utility import buildRec, MLP
-from dl4s.TRBM.RBM import binRBM, gaussRBM
+from dl4s.TRBM.RBM import binRBM, gaussRBM, mu_ssRBM
 from dl4s.tools import get_batches_idx
 import tensorflow as tf
 import numpy as np
@@ -263,8 +263,8 @@ class _RnnRBM(object):
                 x = validData[Idx.tolist()]
                 validLoss.append(x.shape[0] * self.val_function(x))
             validLoss_avg = np.asarray(validLoss).sum() / len(validData)
-            print("In epoch \x1b[1;32m%4d\x1b[0m: the training ELBO is "
-                  "\x1b[1;32m%10.4f\x1b[0m; the valid ELBO is \x1b[1;32m%10.4f\x1b[0m." % (
+            print("In epoch \x1b[1;32m%4d\x1b[0m: the training loss is "
+                  "\x1b[1;32m%10.4f\x1b[0m; the valid loss is \x1b[1;32m%10.4f\x1b[0m." % (
                       epoch, trainLoss_avg, validLoss_avg))
 
             # check the early stopping conditions.
@@ -304,10 +304,10 @@ class _RnnRBM(object):
         testLoss_avg = np.asarray(testLoss).sum() / len(testData)
 
         # evaluate the model w.r.t the valid set and record the average loss.
-        print("BEST MODEL from epoch \x1b[1;91m%4d\x1b[0m with training ELBO"
-              " \x1b[1;91m%10.4f\x1b[0m and valid ELBO \x1b[1;91m%10.4f\x1b[0m."
+        print("BEST MODEL from epoch \x1b[1;91m%4d\x1b[0m with training loss"
+              " \x1b[1;91m%10.4f\x1b[0m and valid loss \x1b[1;91m%10.4f\x1b[0m."
               % (bestEpoch, trainLoss_avg, validLoss_avg))
-        print('The testing ELBO is \x1b[1;91m%10.4f\x1b[0m.' % testLoss_avg)
+        print('The testing loss is \x1b[1;91m%10.4f\x1b[0m.' % testLoss_avg)
 
         if saveto is not None:
             np.savez(saveto, historyLoss=np.asarray(historyLoss),
@@ -349,8 +349,7 @@ class binRnnRBM(_RnnRBM, object):
             # the training loss is per frame.
             self._loss = self._rbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
             self._monitor = self._rbm._pll
-            self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel, Batch=tf.shape(self.x)[0],
-                                       Seq=tf.shape(self.x)[1])
+            self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel)
             self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(self._loss)
@@ -372,7 +371,6 @@ class gaussRnnRBM(_RnnRBM, object):
             config=configRNNRBM()
     ):
         super().__init__(config)
-        self._W_Norm = config.W_Norm
         with self._graph.as_default():
             # d_t = [batch, steps, hidden]
             self._mlp = MLP(config.init_scale, config.dimInput, config.dimMlp, config.mlpType)
@@ -403,11 +401,6 @@ class gaussRnnRBM(_RnnRBM, object):
             self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(self._loss)
-            def scaleW():
-                Wnorm = tf.sqrt(tf.reduce_sum(self._rbm._W**2, axis=0))
-                scale = tf.maximum(tf.constant(1.0), Wnorm)
-                return tf.assign(self._rbm._W, scale * self._rbm._W / Wnorm)
-            self._scaleW = scaleW()
             self._runSession()
 
     """#########################################################################
@@ -420,8 +413,6 @@ class gaussRnnRBM(_RnnRBM, object):
         with self._graph.as_default():
             _, loss_value = self._sess.run([self._train_step, self._monitor],
                                            feed_dict={self.x: input, self.lr: lrate})
-            if self._W_Norm:
-                value = self._sess.run(self._scaleW)
         return loss_value
 
 """#########################################################################
@@ -436,7 +427,7 @@ class ssRNNRBM(_RnnRBM, object):
     #########################################################################"""
     def __init__(
             self,
-            config=configRNNRBM()
+            config=configssRNNRBM()
     ):
         super().__init__(config)
         """build the graph"""
@@ -455,7 +446,15 @@ class ssRNNRBM(_RnnRBM, object):
                 bht = tf.tensordot(dt, Wdh, [[-1], [0]]) + bh
                 bvt = tf.zeros(name='bv', shape=config.dimInput)
                 # TODO: build the ssRBM here.
-                pass
+                self._ssrbm = mu_ssRBM(dimV=config.dimInput, dimH=config.dimState,
+                                     init_scale=config.init_scale,
+                                     x=self.x, bv=bvt, bh=bht,
+                                     alphaTrain=config.alphaTrain,
+                                     muTrain=config.muTrain,
+                                     phiTrain=config.phiTrain,
+                                     k=self._gibbs)
+            self._loss = self._ssrbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
+            pass
 
 
 
