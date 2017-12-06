@@ -13,7 +13,7 @@ import os
 
 Config.Opt = 'SGD'
 Config.unitType = 'GRU'
-Config.aisLevel = 1000
+Config.aisLevel = 10000
 Config.aisRun = 20
 Config.dimRec = [500]
 Config.dimMlp = [400, 400]
@@ -25,7 +25,7 @@ Config.eventPath = './binRNNRBM/'
 Config.savePath = './binRNNRBM/'
 SAVETO = './binRNNRBM/historyMidiRNNRBM.npz'
 
-Flag = 'training'                       # {'training'/'evaluation'}
+Flag = 'evaluation'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
     if Flag == 'training':

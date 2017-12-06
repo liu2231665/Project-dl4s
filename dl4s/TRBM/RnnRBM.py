@@ -82,9 +82,8 @@ class _RnnRBM(object):
     output: None.
     #########################################################################"""
     def _runSession(self):
-        if self._loadPath is None:
-            self._sess.run(tf.global_variables_initializer())
-        else:
+        self._sess.run(tf.global_variables_initializer())
+        if self._loadPath is not None:
             saver = tf.train.Saver()
             saver.restore(self._sess, self._loadPath)
         return
@@ -263,8 +262,8 @@ class _RnnRBM(object):
                 x = validData[Idx.tolist()]
                 validLoss.append(x.shape[0] * self.val_function(x))
             validLoss_avg = np.asarray(validLoss).sum() / len(validData)
-            print("In epoch \x1b[1;32m%4d\x1b[0m: the training ELBO is "
-                  "\x1b[1;32m%10.4f\x1b[0m; the valid ELBO is \x1b[1;32m%10.4f\x1b[0m." % (
+            print("In epoch \x1b[1;32m%4d\x1b[0m: the training loss is "
+                  "\x1b[1;32m%10.4f\x1b[0m; the valid loss is \x1b[1;32m%10.4f\x1b[0m." % (
                       epoch, trainLoss_avg, validLoss_avg))
 
             # check the early stopping conditions.
@@ -304,10 +303,10 @@ class _RnnRBM(object):
         testLoss_avg = np.asarray(testLoss).sum() / len(testData)
 
         # evaluate the model w.r.t the valid set and record the average loss.
-        print("BEST MODEL from epoch \x1b[1;91m%4d\x1b[0m with training ELBO"
-              " \x1b[1;91m%10.4f\x1b[0m and valid ELBO \x1b[1;91m%10.4f\x1b[0m."
+        print("BEST MODEL from epoch \x1b[1;91m%4d\x1b[0m with training loss"
+              " \x1b[1;91m%10.4f\x1b[0m and valid loss \x1b[1;91m%10.4f\x1b[0m."
               % (bestEpoch, trainLoss_avg, validLoss_avg))
-        print('The testing ELBO is \x1b[1;91m%10.4f\x1b[0m.' % testLoss_avg)
+        print('The testing loss is \x1b[1;91m%10.4f\x1b[0m.' % testLoss_avg)
 
         if saveto is not None:
             np.savez(saveto, historyLoss=np.asarray(historyLoss),
@@ -349,8 +348,7 @@ class binRnnRBM(_RnnRBM, object):
             # the training loss is per frame.
             self._loss = self._rbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
             self._monitor = self._rbm._pll
-            self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel, Batch=tf.shape(self.x)[0],
-                                       Seq=tf.shape(self.x)[1])
+            self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel)
             self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(self._loss)
@@ -397,8 +395,7 @@ class gaussRnnRBM(_RnnRBM, object):
             # the training loss is per frame.
             self._loss = self._rbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
             self._monitor = self._rbm._monitor
-            self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel, Batch=tf.shape(self.x)[0],
-                                       Seq=tf.shape(self.x)[1])
+            self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel)
             self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(self._loss)
@@ -414,8 +411,6 @@ class gaussRnnRBM(_RnnRBM, object):
         with self._graph.as_default():
             _, loss_value = self._sess.run([self._train_step, self._monitor],
                                            feed_dict={self.x: input, self.lr: lrate})
-            if self._W_Norm:
-                value = self._sess.run(self._scaleW)
         return loss_value
 
 """#########################################################################
@@ -448,18 +443,20 @@ class ssRNNRBM(_RnnRBM, object):
                 Wdh = tf.get_variable('Wdh', shape=[config.dimRec[-1], config.dimState])
                 bht = tf.tensordot(dt, Wdh, [[-1], [0]]) + bh
                 bvt = tf.zeros(name='bv', shape=config.dimInput)
-                self._rbm = mu_ssRBM(dimV=config.dimInput, dimH=config.dimState, init_scale=config.init_scale,
-                                     x=self.x, bv=bvt, bh=bht, muTrain=config.muTrain,
-                                     phiTrain=config.phiTrain, alphaTrain=config.alphaTrain,
+                self._ssrbm = mu_ssRBM(dimV=config.dimInput, dimH=config.dimState,
+                                     init_scale=config.init_scale,
+                                     x=self.x, bv=bvt, bh=bht,
+                                     alphaTrain=config.alphaTrain,
+                                     muTrain=config.muTrain,
+                                     phiTrain=config.phiTrain,
                                      k=self._gibbs)
-                # the training loss is per frame.
-                self._loss = self._rbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
-                self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel, Batch=tf.shape(self.x)[0],
-                                           Seq=tf.shape(self.x)[1])
-                self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
-                self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-                self._train_step = self._optimizer.minimize(self._loss)
-                self._runSession()
+            self._loss = self._ssrbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
+            self._logZ = self._ssrbm.AIS(self._aisRun, self._aisLevel)
+            self._nll = tf.reduce_mean(self._ssrbm.FreeEnergy(self.x) + self._logZ)
+            self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+            self._train_step = self._optimizer.minimize(self._loss)
+            self._runSession()
+            pass
 
 
 
