@@ -82,9 +82,8 @@ class _RnnRBM(object):
     output: None.
     #########################################################################"""
     def _runSession(self):
-        if self._loadPath is None:
-            self._sess.run(tf.global_variables_initializer())
-        else:
+        self._sess.run(tf.global_variables_initializer())
+        if self._loadPath is not None:
             saver = tf.train.Saver()
             saver.restore(self._sess, self._loadPath)
         return
@@ -396,8 +395,7 @@ class gaussRnnRBM(_RnnRBM, object):
             # the training loss is per frame.
             self._loss = self._rbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
             self._monitor = self._rbm._monitor
-            self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel, Batch=tf.shape(self.x)[0],
-                                       Seq=tf.shape(self.x)[1])
+            self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel)
             self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(self._loss)
@@ -445,7 +443,6 @@ class ssRNNRBM(_RnnRBM, object):
                 Wdh = tf.get_variable('Wdh', shape=[config.dimRec[-1], config.dimState])
                 bht = tf.tensordot(dt, Wdh, [[-1], [0]]) + bh
                 bvt = tf.zeros(name='bv', shape=config.dimInput)
-                # TODO: build the ssRBM here.
                 self._ssrbm = mu_ssRBM(dimV=config.dimInput, dimH=config.dimState,
                                      init_scale=config.init_scale,
                                      x=self.x, bv=bvt, bh=bht,
@@ -454,6 +451,11 @@ class ssRNNRBM(_RnnRBM, object):
                                      phiTrain=config.phiTrain,
                                      k=self._gibbs)
             self._loss = self._ssrbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
+            self._logZ = self._ssrbm.AIS(self._aisRun, self._aisLevel)
+            self._nll = tf.reduce_mean(self._ssrbm.FreeEnergy(self.x) + self._logZ)
+            self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+            self._train_step = self._optimizer.minimize(self._loss)
+            self._runSession()
             pass
 
 
