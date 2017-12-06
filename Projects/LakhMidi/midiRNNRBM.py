@@ -13,7 +13,7 @@ import os
 
 Config.Opt = 'SGD'
 Config.unitType = 'GRU'
-Config.aisLevel = 10000
+Config.aisLevel = 5000
 Config.aisRun = 20
 Config.dimRec = [500]
 Config.dimMlp = [400, 400]
@@ -48,6 +48,6 @@ if __name__ == '__main__':
         Dataset = fetchData()
         RnnRbm = binRnnRBM(Config)
         print('Evaluation: start computing the accuracy metric.')
-        ACC, NLL = accRBM(RnnRbm, Dataset['test'], batchSize=125)
+        ACC, NLL = accRBM(RnnRbm, Dataset['test'], batchSize=25)
         print('The testing transcription accuracy is \x1b[1;91m%10.4f\x1b[0m.' % ACC)
         print('The testing transcription NLL is \x1b[1;91m%10.4f\x1b[0m.' % NLL)

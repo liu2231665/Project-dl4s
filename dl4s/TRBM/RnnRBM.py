@@ -1,4 +1,3 @@
-# TODO: finish gauss RNN-RBM.
 """#########################################################################
 Author: Yingru Liu
 Institute: Stony Brook University
@@ -156,7 +155,7 @@ class _RnnRBM(object):
     train_function: compute the monitor and update the tensor variables.
     input: input - numerical input.
            lrate - <scalar> learning rate.
-    output: the pseudo log-likelihood value.
+    output: the reconstruction error.
     #########################################################################"""
     def train_function(self, input, lrate):
         with self._graph.as_default():
@@ -167,7 +166,7 @@ class _RnnRBM(object):
     """#########################################################################
     val_function: compute the validation loss with given input.
     input: input - numerical input.
-    output: the negative log-likelihood value.
+    output: the reconstruction error.
     #########################################################################"""
     def val_function(self, input):
         with self._graph.as_default():
@@ -348,7 +347,7 @@ class binRnnRBM(_RnnRBM, object):
             # the training loss is per frame.
             self._loss = self._rbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
             self._monitor = self._rbm._pll
-            self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel)
+            self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel, tf.shape(self.x)[0], tf.shape(self.x)[1])
             self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(self._loss)
@@ -395,7 +394,7 @@ class gaussRnnRBM(_RnnRBM, object):
             # the training loss is per frame.
             self._loss = self._rbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
             self._monitor = self._rbm._monitor
-            self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel)
+            self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel, tf.shape(self.x)[0], tf.shape(self.x)[1])
             self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(self._loss)
@@ -405,7 +404,7 @@ class gaussRnnRBM(_RnnRBM, object):
     train_function: compute the monitor and update the tensor variables.
     input: input - numerical input.
            lrate - <scalar> learning rate.
-    output: the pseudo log-likelihood value.
+    output: the reconstruction error.
     #########################################################################"""
     def train_function(self, input, lrate):
         with self._graph.as_default():
@@ -451,12 +450,22 @@ class ssRNNRBM(_RnnRBM, object):
                                      phiTrain=config.phiTrain,
                                      k=self._gibbs)
             self._loss = self._ssrbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
-            self._logZ = self._ssrbm.AIS(self._aisRun, self._aisLevel)
+            self._logZ = self._ssrbm.AIS(self._aisRun, self._aisLevel, tf.shape(self.x)[0], tf.shape(self.x)[1])
             self._nll = tf.reduce_mean(self._ssrbm.FreeEnergy(self.x) + self._logZ)
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(self._loss)
             self._runSession()
-            pass
+
+    """#########################################################################
+    train_function: compute the monitor and update the tensor variables.
+    input: input - numerical input.
+           lrate - <scalar> learning rate.
+    output: the reconstruction error.
+    #########################################################################"""
+    def train_function(self, input, lrate):
+        with self._graph.as_default():
+            self._sess.run(self._train_step, feed_dict={self.x: input, self.lr: lrate})
+        return
 
 
 
