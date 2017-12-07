@@ -13,61 +13,59 @@ import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
     X = dict()
-    X = np.random.normal(0, 1.0, size=(100, 25, 200))
+    X = np.random.normal(0, 1.0, size=(100, 25, 50))
     Config = configssRNNRBM()
-    Config.Opt = 'SGD'
-    Config.dimRec = [400]
-    Config.dimMlp = [400, 400]
-    Config.dimInput = 200
-    Config.dimState = 400
+    Config.Opt = 'Adam'
+    Config.dimRec = [100]
+    Config.dimMlp = [100, 100]
+    Config.dimInput = 50
+    Config.dimState = 100
     Config.init_scale = 0.01
-    Config.Gibbs = 15
+    Config.Gibbs = 1
     Config.aisLevel = 20
     Config.aisRun = 20
+    Config.W_Norm = True
     Config.savePath = './RNNRBM/my-model'
 
     """
     test training and model operation.
     """
     RNNRBM = ssRNNRBM(Config)
-    for i in range(50):
-        print("The training ELBO is %f." % RNNRBM.train_function(input=X, lrate=0.001))
+    for i in range(10):
+        print("The training RMSE is %f." % RNNRBM.train_function(input=X, lrate=0.005))
+    """
+    test precision and covariance operation.
+    """
+    pre = RNNRBM.cov_function(X)
+    cov = RNNRBM.pre_function(X)
+    print(RNNRBM.ais_function(X))
 
     """
     test the generating sample.
     """
-    print("The valid ELBO is %f." % RNNRBM.val_function(input=X))
+    print("The valid RMSE is %f." % RNNRBM.val_function(input=X))
     samples = RNNRBM.gen_function(numSteps=40)
     plt.figure(1)
-    plt.imshow(samples, cmap='binary')
+    plt.imshow(samples, cmap='jet')
     """
     test the encoder model.
     """
     plt.figure(2)
     mu= RNNRBM.hidden_function(X)
     plt.imshow(mu[0, :, :], cmap='jet')
+    plt.figure(3)
+    plt.imshow(pre[0, 5, :, :], cmap='jet')
+    plt.figure(4)
+    plt.imshow(cov[0, 5, :, :], cmap='jet')
     plt.show()
-    """
-    test saving and restoring model.
-    """
-    RNNRBM.saveModel()
-    loadPath = './RNNRBM/my-model'
-    RNNRBM.loadModel(loadPath)
-    for i in range(10):
-        print(RNNRBM.train_function(input=X, lrate=0.01))
-
-    """
-    test multi-graph (One RNN instant = one graph).
-    """
-    RNNRBM2 = ssRNNRBM(Config)
 
     """
     test the full training function.
     """
     X = dict()
-    X['train'] = np.random.binomial(1, 0.5, size=(130, 25, 200))
-    X['valid'] = np.random.binomial(1, 0.5, size=(130, 25, 200))
-    X['test'] = np.random.binomial(1, 0.5, size=(130, 25, 200))
+    X['train'] = np.random.binomial(1, 0.5, size=(130, 25, 50))
+    X['valid'] = np.random.binomial(1, 0.5, size=(130, 25, 50))
+    X['test'] = np.random.binomial(1, 0.5, size=(130, 25, 50))
     RNNRBM.full_train(dataset=X, maxEpoch=5, earlyStop=10, batchSize=125, valid_batchSize=25, learning_rate=0.001,
                     saveto='./RNNRBM/results.npz')
 

@@ -515,11 +515,22 @@ class mu_ssRBM(object):
                     self._phi = tf.nn.relu(tf.get_variable('phi', shape=(self._dimH, self._dimV))) \
                                 + tf.stop_gradient(term)
                 else:
-                    self._phi = tf.zeros(shape=(self._dimH, self._dimV), name='phi') / self._dimH
+                    self._phi = tf.zeros(shape=(self._dimH, self._dimV), name='phi')
             # x = [batch, steps, dimV]. O.w, we define it as non-temporal data with shape [batch,dimV].
             self._V = x if x is not None else tf.placeholder(dtype=tf.float32, shape=[None, dimV], name='V')
             # <tensor placeholder> learning rate.
             self.lr = tf.placeholder(dtype='float32', shape=(), name='learningRate')
+            # TODO: <tensor> Cv_h.
+            newH = self.GibbsSampling(self._V, k=k)[1]      # shape = [..., dimH]
+            newH = tf.expand_dims(newH, axis=2)
+            W = tf.expand_dims(tf.expand_dims(self._W, axis=0), axis=0)
+            term1 = newH * W / (self._alpha + 1e-8)
+            term1 = tf.tensordot(term1, self._W, [[-1], [-1]])
+            Cv_sh = 1 / (self._gamma + tf.tensordot(newH, self._phi, [[-1], [0]]) + 1e-8)
+            term2 = Cv_sh * tf.eye(self._dimV, batch_shape=[1, 1])
+            self.PreV_h = term2 + term1
+            self.CovV_h = tf.matrix_inverse(self.PreV_h)
+
 
     """#########################################################################
     sampleHgivenV: the inference direction of the RBM by P(H|V).
@@ -687,6 +698,6 @@ class mu_ssRBM(object):
     output: the tensor that assign the normalization to W.
     #########################################################################"""
     def add_constraint(self):
-        Wnorm = tf.stop_gradient(tf.norm(self._W, axis=[0]))
-        mask = tf.maximum(1.0, Wnorm)
+        Wnorm = tf.stop_gradient(tf.norm(self._W, axis=0))
+        mask = tf.minimum(1.0, Wnorm)
         return tf.assign(self._W, mask * self._W / Wnorm)

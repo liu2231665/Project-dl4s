@@ -198,7 +198,7 @@ class _RnnRBM(object):
         else:
             raise ValueError("Neither input or numSteps is provided!!")
         k = gibbs if gibbs is not None else self._gibbs
-        newV, _, _, _ = self._rbm.GibbsSampling(self.x, k=k)
+        newV= self._rbm.GibbsSampling(self.x, k=k)[0]
         sample = self._sess.run(newV, feed_dict={self.x: sample})
         return sample if x is not None else sample[0]
 
@@ -442,18 +442,26 @@ class ssRNNRBM(_RnnRBM, object):
                 Wdh = tf.get_variable('Wdh', shape=[config.dimRec[-1], config.dimState])
                 bht = tf.tensordot(dt, Wdh, [[-1], [0]]) + bh
                 bvt = tf.zeros(name='bv', shape=config.dimInput)
-                self._ssrbm = mu_ssRBM(dimV=config.dimInput, dimH=config.dimState,
+                self._rbm = mu_ssRBM(dimV=config.dimInput, dimH=config.dimState,
                                      init_scale=config.init_scale,
                                      x=self.x, bv=bvt, bh=bht,
                                      alphaTrain=config.alphaTrain,
                                      muTrain=config.muTrain,
                                      phiTrain=config.phiTrain,
                                      k=self._gibbs)
-            self._loss = self._ssrbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
-            self._logZ = self._ssrbm.AIS(self._aisRun, self._aisLevel, tf.shape(self.x)[0], tf.shape(self.x)[1])
-            self._nll = tf.reduce_mean(self._ssrbm.FreeEnergy(self.x) + self._logZ)
+            self._loss = self._rbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
+            self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel, tf.shape(self.x)[0], tf.shape(self.x)[1])
+            self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(self._loss)
+            # add the computation of precision and covariance matrix of ssRBM.
+            self.PreV_h = self._rbm.PreV_h
+            self.CovV_h = self._rbm.CovV_h
+            # add the scaling operation of W.
+            if config.W_Norm:
+                self._scaleW = self._rbm.add_constraint()
+            else:
+                self._scaleW = None
             self._runSession()
 
     """#########################################################################
@@ -465,8 +473,60 @@ class ssRNNRBM(_RnnRBM, object):
     def train_function(self, input, lrate):
         with self._graph.as_default():
             self._sess.run(self._train_step, feed_dict={self.x: input, self.lr: lrate})
-        return
+            if self._scaleW is not None:
+                newW = self._sess.run(self._scaleW)
+            RMSE = []
+            for i in range(20):
+                sample = self.gen_function(input)
+                rmse = (input - sample) ** 2
+                rmse = rmse.sum(-1)
+                RMSE.append(rmse.mean())
+        return np.sqrt(np.asarray(RMSE).mean())
 
+    """#########################################################################
+    val_function: compute the validation loss with given input.
+    input: input - numerical input.
+    output: the reconstruction error.
+    #########################################################################"""
+    def val_function(self, input):
+        with self._graph.as_default():
+            RMSE = []
+            for i in range(50):
+                sample = self.gen_function(input)
+                rmse = (input - sample) ** 2
+                rmse = rmse.sum(-1)
+                RMSE.append(rmse.mean())
+        return np.sqrt(np.asarray(RMSE).mean())
+
+    """#########################################################################
+    cov_function: compute the covariance matrix Cv_h.
+    input: input - numerical input.
+    output:  covariance matrix Cv_h.
+    #########################################################################"""
+    def cov_function(self, input):
+        with self._graph.as_default():
+            return self._sess.run(self.CovV_h, feed_dict={self.x: input})
+
+    """#########################################################################
+    pre_function: compute the precision matrix Cv_h^{-1}.
+    input: input - numerical input.
+    output:  precision matrix Cv_h^{-1}.
+    #########################################################################"""
+    def pre_function(self, input):
+        with self._graph.as_default():
+            return self._sess.run(self.PreV_h, feed_dict={self.x: input})
+
+    """#########################################################################
+    hidden_function: generate the hidden activation of given X represented by
+                     P(H|V).
+    input: input - numerical input.
+           gibbs - the number of gibbs sampling.
+    output: P(H|V).
+    #########################################################################"""
+    def hidden_function(self, input, gibbs=None):
+        k = gibbs if gibbs is not None else self._gibbs
+        Ph_v = self._rbm.GibbsSampling(self.x, k=k)[4]
+        return self._sess.run(Ph_v, feed_dict={self.x: input})
 
 
 """#########################################################################
