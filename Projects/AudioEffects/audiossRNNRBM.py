@@ -19,9 +19,11 @@ Config.dimRec = [500]
 Config.dimMlp = [400, 400]
 Config.dimInput = 150
 Config.dimState = 500
-Config.init_scale = 0.01
+Config.init_scale = 0.0001
 Config.Gibbs = 1
 Config.W_Norm = True
+Config.muTrain = False
+Config.alphaTrain = False
 Config.eventPath = './audiossRNNRBM/'
 Config.savePath = './audiossRNNRBM/'
 SAVETO = './audiossRNNRBM/historyaudio_ssRNNRBM.npz'
@@ -39,7 +41,7 @@ if __name__ == '__main__':
         if not os.path.exists(Config.savePath):
             os.makedirs(Config.savePath)
         RnnRbm = ssRNNRBM(Config)
-        RnnRbm.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.001,
+        RnnRbm.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.000,
                        valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':

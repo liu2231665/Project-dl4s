@@ -494,7 +494,7 @@ class mu_ssRBM(object):
                 self._alpha = alpha
             else:
                 if alphaTrain:
-                    self._alpha = tf.nn.relu(tf.get_variable('alpha', shape=self._dimS,
+                    self._alpha = tf.nn.softplus(tf.get_variable('alpha', shape=self._dimS,
                                                              initializer=tf.ones_initializer))
                 else:
                     self._alpha = tf.ones(shape=self._dimS, name='alpha')
@@ -505,14 +505,14 @@ class mu_ssRBM(object):
                 if muTrain:
                     self._mu = tf.get_variable('mu', shape=self._dimS, initializer=tf.zeros_initializer)
                 else:
-                    self._mu = tf.ones(shape=self._dimS, name='mu')
+                    self._mu = tf.zeros(shape=self._dimS, name='mu')
             #
             if phi is not None:
                 self._phi = phi
             else:
                 if phiTrain:
                     term = tf.transpose(self._W**2 / (self._alpha + 1e-8)) * self._dimV
-                    self._phi = tf.nn.relu(tf.get_variable('phi', shape=(self._dimH, self._dimV))) \
+                    self._phi = tf.nn.relu(tf.get_variable('phi', shape=(self._dimH, self._dimV), initializer=tf.ones_initializer)) \
                                 + tf.stop_gradient(term)
                 else:
                     self._phi = tf.zeros(shape=(self._dimH, self._dimV), name='phi')
@@ -562,6 +562,9 @@ class mu_ssRBM(object):
         meanS_vh = factorV * H
         newS = tf.distributions.Normal(loc=meanS_vh, scale=1.0 / (tf.sqrt(self._alpha) + 1e-8)
                                        , name='PS_vh').sample()
+        # truncated the samples.
+        newS = tf.minimum(10.0, newS)
+        newS = tf.maximum(-10.0, newS)
         return newS, meanS_vh
 
     """#########################################################################
@@ -580,6 +583,9 @@ class mu_ssRBM(object):
                             + self._bv)
         newV_sh = tf.distributions.Normal(loc=meanV_sh, scale=tf.sqrt(Cv_sh),
                                           name='PV_sh').sample()
+        # truncated the samples.
+        newV_sh = tf.minimum(10.0, newV_sh)
+        newV_sh = tf.maximum(-10.0, newV_sh)
         return newV_sh, meanV_sh
 
     """#########################################################################
@@ -600,7 +606,7 @@ class mu_ssRBM(object):
             raise ValueError("k should be greater than zero!!")
         for i in range(k):
             newH, meanH_v = self.sampleHgivenV(newV, beta)
-            newS, meanS_vh = self.sampleSgivenVH(V, newH, beta)
+            newS, meanS_vh = self.sampleSgivenVH(newV, newH, beta)
             newV, meanV_sh = self.sampleVgivenSH(newS, newH, beta)
         return newV, newH, newS, meanV_sh, meanH_v, meanS_vh
 

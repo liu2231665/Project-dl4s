@@ -475,13 +475,10 @@ class ssRNNRBM(_RnnRBM, object):
             self._sess.run(self._train_step, feed_dict={self.x: input, self.lr: lrate})
             if self._scaleW is not None:
                 newW = self._sess.run(self._scaleW)
-            RMSE = []
-            for i in range(20):
-                sample = self.gen_function(input)
-                rmse = (input - sample) ** 2
-                rmse = rmse.sum(-1)
-                RMSE.append(rmse.mean())
-        return np.sqrt(np.asarray(RMSE).mean())
+            sample = self.gen_function(input)
+            rmse = (input - sample) ** 2
+            rmse = rmse.sum(-1)
+            return np.sqrt(rmse.mean())
 
     """#########################################################################
     val_function: compute the validation loss with given input.
@@ -490,13 +487,10 @@ class ssRNNRBM(_RnnRBM, object):
     #########################################################################"""
     def val_function(self, input):
         with self._graph.as_default():
-            RMSE = []
-            for i in range(50):
-                sample = self.gen_function(input)
-                rmse = (input - sample) ** 2
-                rmse = rmse.sum(-1)
-                RMSE.append(rmse.mean())
-        return np.sqrt(np.asarray(RMSE).mean())
+            sample = self.gen_function(input)
+            rmse = (input - sample) ** 2
+            rmse = rmse.sum(-1)
+            return np.sqrt(rmse.mean())
 
     """#########################################################################
     cov_function: compute the covariance matrix Cv_h.
