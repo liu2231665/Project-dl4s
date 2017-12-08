@@ -435,7 +435,7 @@ class mu_ssRBM(object):
             init_scale,
             x=None,
             W=None,  # W.shape = [dimV, dimH]
-            W_Norm=True,
+            Bound=(-1.0, 1.0),
             bv=None,
             bh=None,
             dimS=None,
@@ -450,6 +450,7 @@ class mu_ssRBM(object):
             k=1
     ):
         # <Tensorflow Session>.
+        self.bound = Bound
         self._sess = tf.Session()
         # the proposal distribution.
         self._k = k
@@ -563,8 +564,8 @@ class mu_ssRBM(object):
         newS = tf.distributions.Normal(loc=meanS_vh, scale=1.0 / (tf.sqrt(self._alpha) + 1e-8)
                                        , name='PS_vh').sample()
         # truncated the samples.
-        newS = tf.minimum(10.0, newS)
-        newS = tf.maximum(-10.0, newS)
+        newS = tf.minimum(meanS_vh + 2*tf.sqrt(self._alpha), newS)
+        newS = tf.maximum(meanS_vh - 2*tf.sqrt(self._alpha), newS)
         return newS, meanS_vh
 
     """#########################################################################
@@ -584,8 +585,8 @@ class mu_ssRBM(object):
         newV_sh = tf.distributions.Normal(loc=meanV_sh, scale=tf.sqrt(Cv_sh),
                                           name='PV_sh').sample()
         # truncated the samples.
-        newV_sh = tf.minimum(10.0, newV_sh)
-        newV_sh = tf.maximum(-10.0, newV_sh)
+        newV_sh = tf.minimum(self.bound[1], newV_sh)
+        newV_sh = tf.maximum(self.bound[0], newV_sh)
         return newV_sh, meanV_sh
 
     """#########################################################################

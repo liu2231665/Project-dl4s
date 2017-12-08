@@ -420,11 +420,13 @@ class ssRNNRBM(_RnnRBM, object):
     """#########################################################################
     __init__:the initialization function.
     input: Config - configuration class in ./utility.
+           Bound - the maximum norm of the observation frames.
     output: None.
     #########################################################################"""
     def __init__(
             self,
-            config=configssRNNRBM()
+            config=configssRNNRBM(),
+            Bound=(-1.0, 1.0)
     ):
         super().__init__(config)
         """build the graph"""
@@ -443,7 +445,7 @@ class ssRNNRBM(_RnnRBM, object):
                 bht = tf.tensordot(dt, Wdh, [[-1], [0]]) + bh
                 bvt = tf.zeros(name='bv', shape=config.dimInput)
                 self._rbm = mu_ssRBM(dimV=config.dimInput, dimH=config.dimState,
-                                     init_scale=config.init_scale,
+                                     init_scale=config.init_scale, Bound=Bound,
                                      x=self.x, bv=bvt, bh=bht,
                                      alphaTrain=config.alphaTrain,
                                      muTrain=config.muTrain,
