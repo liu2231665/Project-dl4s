@@ -459,40 +459,14 @@ class ssRNNRBM(_RnnRBM, object):
             # add the computation of precision and covariance matrix of ssRBM.
             self.PreV_h = self._rbm.PreV_h
             self.CovV_h = self._rbm.CovV_h
+            # add the monitor
+            self._monitor = self._rbm._monitor
             # add the scaling operation of W.
             if config.W_Norm:
                 self._scaleW = self._rbm.add_constraint()
             else:
                 self._scaleW = None
             self._runSession()
-
-    """#########################################################################
-    train_function: compute the monitor and update the tensor variables.
-    input: input - numerical input.
-           lrate - <scalar> learning rate.
-    output: the reconstruction error.
-    #########################################################################"""
-    def train_function(self, input, lrate):
-        with self._graph.as_default():
-            self._sess.run(self._train_step, feed_dict={self.x: input, self.lr: lrate})
-            if self._scaleW is not None:
-                newW = self._sess.run(self._scaleW)
-            sample = self.gen_function(input)
-            rmse = (input - sample) ** 2
-            rmse = rmse.sum(-1)
-            return np.sqrt(rmse.mean())
-
-    """#########################################################################
-    val_function: compute the validation loss with given input.
-    input: input - numerical input.
-    output: the reconstruction error.
-    #########################################################################"""
-    def val_function(self, input):
-        with self._graph.as_default():
-            sample = self.gen_function(input)
-            rmse = (input - sample) ** 2
-            rmse = rmse.sum(-1)
-            return np.sqrt(rmse.mean())
 
     """#########################################################################
     cov_function: compute the covariance matrix Cv_h.

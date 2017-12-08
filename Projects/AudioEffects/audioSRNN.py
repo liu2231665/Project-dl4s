@@ -41,7 +41,7 @@ if __name__ == '__main__':
         SRNN = gaussSRNN(Config)
         # SRNN.full_train(dataset=Dataset, maxEpoch=280, batchSize=125, earlyStop=10, learning_rate=0.00001, for smooth
         #                valid_batchSize=125, saveto=SAVETO)
-        SRNN.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.0001,
+        SRNN.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.001,
                         valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':

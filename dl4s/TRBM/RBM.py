@@ -521,16 +521,20 @@ class mu_ssRBM(object):
             self._V = x if x is not None else tf.placeholder(dtype=tf.float32, shape=[None, dimV], name='V')
             # <tensor placeholder> learning rate.
             self.lr = tf.placeholder(dtype='float32', shape=(), name='learningRate')
-            # TODO: <tensor> Cv_h.
             newH = self.GibbsSampling(self._V, k=k)[1]      # shape = [..., dimH]
             newH = tf.expand_dims(newH, axis=2)
             W = tf.expand_dims(tf.expand_dims(self._W, axis=0), axis=0)
             term1 = newH * W / (self._alpha + 1e-8)
             term1 = tf.tensordot(term1, self._W, [[-1], [-1]])
+            # define the covariance and precision.
             Cv_sh = 1 / (self._gamma + tf.tensordot(newH, self._phi, [[-1], [0]]) + 1e-8)
             term2 = Cv_sh * tf.eye(self._dimV, batch_shape=[1, 1])
             self.PreV_h = term2 + term1
             self.CovV_h = tf.matrix_inverse(self.PreV_h)
+            # define the monitor.
+            muV = self.GibbsSampling(self._V, k=k)[3]
+            monitor = tf.reduce_sum((self._V - muV) ** 2, axis=-1)
+            self._monitor = tf.reduce_mean(monitor)
 
 
     """#########################################################################
