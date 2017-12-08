@@ -490,12 +490,12 @@ class mu_ssRBM(object):
             self._bh = bh if bh is not None else tf.get_variable('bh', shape=dimH, initializer=tf.zeros_initializer)
             #
             self._gamma = gamma if gamma is not None else \
-                tf.nn.relu(tf.get_variable('gamma', shape=self._dimV, initializer=tf.zeros_initializer))
+                tf.exp(tf.get_variable('gamma', shape=self._dimV, initializer=tf.zeros_initializer))
             if alpha is not None:
                 self._alpha = alpha
             else:
                 if alphaTrain:
-                    self._alpha = tf.nn.softplus(tf.get_variable('alpha', shape=self._dimS,
+                    self._alpha = tf.exp(tf.get_variable('alpha', shape=self._dimS,
                                                              initializer=tf.ones_initializer))
                 else:
                     self._alpha = tf.ones(shape=self._dimS, name='alpha')
@@ -513,8 +513,8 @@ class mu_ssRBM(object):
             else:
                 if phiTrain:
                     term = tf.transpose(self._W**2 / (self._alpha + 1e-8)) * self._dimV
-                    self._phi = tf.nn.relu(tf.get_variable('phi', shape=(self._dimH, self._dimV), initializer=tf.ones_initializer)) \
-                                + tf.stop_gradient(term)
+                    self._phi = tf.exp(tf.get_variable('phi', shape=(self._dimH, self._dimV), initializer=tf.ones_initializer)) \
+                                + term
                 else:
                     self._phi = tf.zeros(shape=(self._dimH, self._dimV), name='phi')
             # x = [batch, steps, dimV]. O.w, we define it as non-temporal data with shape [batch,dimV].
@@ -532,9 +532,9 @@ class mu_ssRBM(object):
             self.PreV_h = term2 + term1
             self.CovV_h = tf.matrix_inverse(self.PreV_h)
             # define the monitor.
-            muV = self.GibbsSampling(self._V, k=k)[3]
+            muV = self.GibbsSampling(self._V, k=k)[0]
             monitor = tf.reduce_sum((self._V - muV) ** 2, axis=-1)
-            self._monitor = tf.reduce_mean(monitor)
+            self._monitor = tf.sqrt(tf.reduce_mean(monitor))
 
 
     """#########################################################################
@@ -565,11 +565,11 @@ class mu_ssRBM(object):
         #
         factorV = tf.tensordot(V, beta * self._W, [[-1], [0]]) / (self._alpha + 1e-8) + self._mu                       # shape = [..., dimH]
         meanS_vh = factorV * H
-        newS = tf.distributions.Normal(loc=meanS_vh, scale=1.0 / (tf.sqrt(self._alpha) + 1e-8)
-                                       , name='PS_vh').sample()
+        eps = tf.distributions.Normal(loc=0.0, scale=1.0).sample(sample_shape=(tf.shape(meanS_vh)))
+        newS = meanS_vh + tf.sqrt(self._alpha) * eps
         # truncated the samples.
-        newS = tf.minimum(meanS_vh + 2*tf.sqrt(self._alpha), newS)
-        newS = tf.maximum(meanS_vh - 2*tf.sqrt(self._alpha), newS)
+        #newS = tf.minimum(meanS_vh + 2*tf.sqrt(self._alpha), newS)
+        #newS = tf.maximum(meanS_vh - 2*tf.sqrt(self._alpha), newS)
         return newS, meanS_vh
 
     """#########################################################################
@@ -586,11 +586,11 @@ class mu_ssRBM(object):
         # shape = [..., dimV]
         meanV_sh = Cv_sh * (tf.tensordot(S*H, beta * tf.transpose(self._W), [[-1], [0]])
                             + self._bv)
-        newV_sh = tf.distributions.Normal(loc=meanV_sh, scale=tf.sqrt(Cv_sh),
-                                          name='PV_sh').sample()
+        eps = tf.distributions.Normal(loc=0.0, scale=1.0).sample(sample_shape=(tf.shape(meanV_sh)))
+        newV_sh = meanV_sh + tf.sqrt(Cv_sh) * eps
         # truncated the samples.
-        newV_sh = tf.minimum(self.bound[1], newV_sh)
-        newV_sh = tf.maximum(self.bound[0], newV_sh)
+        #newV_sh = tf.minimum(self.bound[1], newV_sh)
+        #newV_sh = tf.maximum(self.bound[0], newV_sh)
         return newV_sh, meanV_sh
 
     """#########################################################################
@@ -624,7 +624,7 @@ class mu_ssRBM(object):
     def FreeEnergy(self, V, beta=1.0):
         sqr_term = 0.5 * tf.tensordot(V**2, self._gamma, [[-1], [0]])
         lin_term = tf.tensordot(V, self._bv, [[-1], [0]])
-        con_term = 0.5 * tf.reduce_sum(tf.log(2*np.pi/(self._alpha + 1e-8)))
+        con_term = 0.5 * tf.reduce_sum(tf.log(2*np.pi) - tf.log(self._alpha + 1e-8))
         #
         factorV = tf.tensordot(V, beta * self._W, [[-1], [0]])  # shape = [..., dimH]
         sqr_term_h = (0.5 * factorV ** 2) / (self._alpha + 1e-8) \
