@@ -191,15 +191,16 @@ class _RnnRBM(object):
     output: should be the sample.
     #########################################################################"""
     def gen_function(self, x=None, numSteps=None, gibbs=None):
-        if x is not None:
-            sample = x
-        elif numSteps is not None:
-            sample = np.zeros(shape=(1, numSteps, self._dimInput))
-        else:
-            raise ValueError("Neither input or numSteps is provided!!")
-        k = gibbs if gibbs is not None else self._gibbs
-        newV= self._rbm.GibbsSampling(self.x, k=k)[0]
-        sample = self._sess.run(newV, feed_dict={self.x: sample})
+        with self._graph.as_default():
+            if x is not None:
+                sample = x
+            elif numSteps is not None:
+                sample = np.zeros(shape=(1, numSteps, self._dimInput))
+            else:
+                raise ValueError("Neither input or numSteps is provided!!")
+            k = gibbs if gibbs is not None else self._gibbs
+            newV= self._rbm.GibbsSampling(self.x, k=k)[0]
+            sample = self._sess.run(newV, feed_dict={self.x: sample})
         return sample if x is not None else sample[0]
 
     """#########################################################################
@@ -210,8 +211,9 @@ class _RnnRBM(object):
     output: P(H|V).
     #########################################################################"""
     def hidden_function(self, input, gibbs=None):
-        k = gibbs if gibbs is not None else self._gibbs
-        _, _, Ph_v, _ = self._rbm.GibbsSampling(self.x, k=k)
+        with self._graph.as_default():
+            k = gibbs if gibbs is not None else self._gibbs
+            _, _, Ph_v, _ = self._rbm.GibbsSampling(self.x, k=k)
         return self._sess.run(Ph_v, feed_dict={self.x: input})
 
     """#########################################################################
@@ -494,10 +496,24 @@ class ssRNNRBM(_RnnRBM, object):
     output: P(H|V).
     #########################################################################"""
     def hidden_function(self, input, gibbs=None):
-        k = gibbs if gibbs is not None else self._gibbs
-        Ph_v = self._rbm.GibbsSampling(self.x, k=k)[4]
+        with self._graph.as_default():
+            k = gibbs if gibbs is not None else self._gibbs
+            Ph_v = self._rbm.GibbsSampling(self.x, k=k)[4]
         return self._sess.run(Ph_v, feed_dict={self.x: input})
 
+    """#########################################################################
+    train_function: compute the monitor and update the tensor variables.
+    input: input - numerical input.
+           lrate - <scalar> learning rate.
+    output: the reconstruction error.
+    #########################################################################"""
+    def train_function(self, input, lrate):
+        with self._graph.as_default():
+            _, loss_value = self._sess.run([self._train_step, self._monitor],
+                                           feed_dict={self.x: input, self.lr: lrate})
+            if self._scaleW is not None:
+                newW = self._sess.run(self._scaleW)
+        return loss_value
 
 """#########################################################################
 Class: binssRNNRBM - the RNNRBM model for stochastic binary inputs

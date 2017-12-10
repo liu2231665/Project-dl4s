@@ -490,13 +490,13 @@ class mu_ssRBM(object):
             self._bh = bh if bh is not None else tf.get_variable('bh', shape=dimH, initializer=tf.zeros_initializer)
             #
             self._gamma = gamma if gamma is not None else \
-                tf.exp(tf.get_variable('gamma', shape=self._dimV, initializer=tf.zeros_initializer))
+                tf.nn.softplus(tf.get_variable('gamma', shape=self._dimV, initializer=tf.zeros_initializer))
             if alpha is not None:
                 self._alpha = alpha
             else:
                 if alphaTrain:
                     self._alpha = tf.exp(tf.get_variable('alpha', shape=self._dimS,
-                                                             initializer=tf.ones_initializer))
+                                                             initializer=tf.zeros_initializer))
                 else:
                     self._alpha = tf.ones(shape=self._dimS, name='alpha')
             #
@@ -512,9 +512,7 @@ class mu_ssRBM(object):
                 self._phi = phi
             else:
                 if phiTrain:
-                    term = tf.transpose(self._W**2 / (self._alpha + 1e-8)) * self._dimV
-                    self._phi = tf.exp(tf.get_variable('phi', shape=(self._dimH, self._dimV), initializer=tf.ones_initializer)) \
-                                + term
+                    self._phi = tf.nn.relu(tf.get_variable('phi', shape=(self._dimH, self._dimV)))
                 else:
                     self._phi = tf.zeros(shape=(self._dimH, self._dimV), name='phi')
             # x = [batch, steps, dimV]. O.w, we define it as non-temporal data with shape [batch,dimV].
@@ -532,9 +530,10 @@ class mu_ssRBM(object):
             self.PreV_h = term2 + term1
             self.CovV_h = tf.matrix_inverse(self.PreV_h)
             # define the monitor.
-            muV = self.GibbsSampling(self._V, k=k)[0]
+            muV = self.GibbsSampling(self._V, k=k)[3]
             monitor = tf.reduce_sum((self._V - muV) ** 2, axis=-1)
             self._monitor = tf.sqrt(tf.reduce_mean(monitor))
+            #self._monitor = muV
 
 
     """#########################################################################
@@ -565,11 +564,8 @@ class mu_ssRBM(object):
         #
         factorV = tf.tensordot(V, beta * self._W, [[-1], [0]]) / (self._alpha + 1e-8) + self._mu                       # shape = [..., dimH]
         meanS_vh = factorV * H
-        eps = tf.distributions.Normal(loc=0.0, scale=1.0).sample(sample_shape=(tf.shape(meanS_vh)))
+        eps = tf.truncated_normal(shape=(tf.shape(meanS_vh)))
         newS = meanS_vh + tf.sqrt(self._alpha) * eps
-        # truncated the samples.
-        #newS = tf.minimum(meanS_vh + 2*tf.sqrt(self._alpha), newS)
-        #newS = tf.maximum(meanS_vh - 2*tf.sqrt(self._alpha), newS)
         return newS, meanS_vh
 
     """#########################################################################
@@ -586,11 +582,9 @@ class mu_ssRBM(object):
         # shape = [..., dimV]
         meanV_sh = Cv_sh * (tf.tensordot(S*H, beta * tf.transpose(self._W), [[-1], [0]])
                             + self._bv)
-        eps = tf.distributions.Normal(loc=0.0, scale=1.0).sample(sample_shape=(tf.shape(meanV_sh)))
+        eps = tf.truncated_normal(shape=(tf.shape(meanV_sh)))
         newV_sh = meanV_sh + tf.sqrt(Cv_sh) * eps
-        # truncated the samples.
-        #newV_sh = tf.minimum(self.bound[1], newV_sh)
-        #newV_sh = tf.maximum(self.bound[0], newV_sh)
+        #return newV_sh, meanV_sh
         return newV_sh, meanV_sh
 
     """#########################################################################
@@ -710,5 +704,5 @@ class mu_ssRBM(object):
     #########################################################################"""
     def add_constraint(self):
         Wnorm = tf.stop_gradient(tf.norm(self._W, axis=0))
-        mask = tf.minimum(1.0, Wnorm)
-        return tf.assign(self._W, mask * self._W / Wnorm)
+        #mask = tf.minimum(1.0, Wnorm)
+        return tf.assign(self._W, self._W / Wnorm)

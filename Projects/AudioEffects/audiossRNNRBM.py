@@ -18,7 +18,7 @@ Config.aisRun = 20
 Config.dimRec = [500]
 Config.dimMlp = [400, 400]
 Config.dimInput = 150
-Config.dimState = 500
+Config.dimState = 250
 Config.init_scale = 0.01
 Config.Gibbs = 1
 Config.W_Norm = True
@@ -41,7 +41,7 @@ if __name__ == '__main__':
         if not os.path.exists(Config.savePath):
             os.makedirs(Config.savePath)
         RnnRbm = ssRNNRBM(Config, Bound=(-25.0, 25.0))
-        RnnRbm.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.01,
+        RnnRbm.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.001,
                        valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':
