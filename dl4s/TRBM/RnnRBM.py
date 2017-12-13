@@ -459,6 +459,7 @@ class ssRNNRBM(_RnnRBM, object):
                                      k=self._gibbs)
             self._loss = self._rbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
             self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel, tf.shape(self.x)[0], tf.shape(self.x)[1])
+            #self._nll = self._logZ
             self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(self._loss)

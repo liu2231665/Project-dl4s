@@ -41,11 +41,11 @@ if __name__ == '__main__':
         if not os.path.exists(Config.savePath):
             os.makedirs(Config.savePath)
         RnnRbm = ssRNNRBM(Config, Bound=(-25.0, 25.0))
-        RnnRbm.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.001,
+        RnnRbm.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=300, learning_rate=0.001,
                        valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':
-        Config.aisLevel = 1000
+        Config.aisLevel = 100
         Config.aisRun = 20
         Config.loadPath = Config.savePath
         RnnRbm = ssRNNRBM(Config, Bound=(-25.0, 25.0))

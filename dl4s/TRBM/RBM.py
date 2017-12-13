@@ -460,11 +460,14 @@ class mu_ssRBM(object):
             phi=None,
             phiTrain=False,
             scope=None,
+            bound=[-25.0, 25.0],
             k=1
     ):
         self._sess = tf.Session()
         # the proposal distribution.
         self._k = k
+        #
+        self._bound = bound
         # Check whether the configuration is correct.
         if x is not None and x.shape[-1] != dimV:
             raise ValueError("You have provided a input tensor but the last shape is not equal to [dimV]!!")
@@ -558,11 +561,14 @@ class mu_ssRBM(object):
             meanH_v - the Bernoulli distribution P(H|V), which is also mean(H|V).
     #########################################################################"""
     def sampleHgivenV(self, V, beta=1.0):
-        factorV = tf.tensordot(V, self._W, [[-1], [0]])  # shape = [..., dimH]
+        factorV = tf.tensordot(V, beta * self._W, [[-1], [0]])  # shape = [..., dimH]
         sqr_term = (0.5 * factorV ** 2) / (self._alpha + 1e-8) \
                    - 0.5 * tf.tensordot(V**2, tf.transpose(self._phi), [[-1], [0]])
         lin_term = factorV * self._mu
-        meanH_v = tf.nn.sigmoid(beta * (sqr_term + lin_term) + self._bh, name='meanH_v')
+        if beta == 0.0:
+            meanH_v = tf.nn.sigmoid(self._bh, name='meanH_v')
+        else:
+            meanH_v = tf.nn.sigmoid(sqr_term + lin_term + self._bh, name='meanH_v')
         newH = tf.distributions.Bernoulli(probs=meanH_v, dtype=tf.float32).sample()
         return newH, meanH_v
 
@@ -576,14 +582,14 @@ class mu_ssRBM(object):
     #########################################################################"""
     def sampleSgivenVH(self, V, H, beta=1.0):
         #
-        factorV = tf.tensordot(V, beta**2 * self._W, [[-1], [0]]) / (self._alpha + 1e-8)\
+        factorV = tf.tensordot(V, beta * self._W, [[-1], [0]]) / (self._alpha + 1e-8)\
                   + self._mu  # shape = [..., dimH]
         meanS_vh1 = factorV
         eps = tf.truncated_normal(shape=(tf.shape(meanS_vh1)))
         if beta == 0.0:
             newS = meanS_vh1 * H
         else:
-            newS = meanS_vh1 * H + tf.sqrt(self._alpha / beta) * eps
+            newS = meanS_vh1 * H + tf.sqrt(self._alpha) * eps
         return newS, meanS_vh1
 
     """#########################################################################
@@ -596,7 +602,10 @@ class mu_ssRBM(object):
     #########################################################################"""
     def sampleVgivenSH(self, S, H, beta=1.0):
         # shape = [..., dimV]
-        Cv_sh = 1 / (self._gamma + tf.tensordot(H, beta * self._phi, [[-1], [0]]) + 1e-8)
+        if beta == 0.0:
+            Cv_sh = 1 / (self._gamma + 1e-8)
+        else:
+            Cv_sh = 1 / (self._gamma + tf.tensordot(H, self._phi, [[-1], [0]]) + 1e-8)
         # shape = [..., dimV]
         meanV_sh = Cv_sh * (tf.tensordot(S*H, beta * tf.transpose(self._W), [[-1], [0]])
                             + self._bv)
@@ -638,12 +647,16 @@ class mu_ssRBM(object):
         lin_term = tf.tensordot(V, self._bv, [[-1], [0]])
         con_term = 0.5 * tf.reduce_sum(tf.log(2*np.pi) - tf.log(self._alpha + 1e-8))
         #
-        factorV = tf.tensordot(V, self._W, [[-1], [0]])  # shape = [..., dimH]
+        factorV = tf.tensordot(V, beta * self._W, [[-1], [0]])  # shape = [..., dimH]
         sqr_term_h = (0.5 * factorV ** 2) / (self._alpha + 1e-8) \
                    - 0.5 * tf.tensordot(V ** 2, tf.transpose(self._phi), [[-1], [0]])
         lin_term_h = factorV * self._mu
-        splus_term = tf.reduce_sum(tf.nn.softplus(beta * (sqr_term_h + lin_term_h) + self._bh),
-                                   axis=[-1])
+        if beta == 0.0:
+            splus_term = tf.reduce_sum(tf.nn.softplus(self._bh),
+                                      axis=[-1])
+        else:
+            splus_term = tf.reduce_sum(tf.nn.softplus(sqr_term_h + lin_term_h + self._bh),
+                                       axis=[-1])
         return sqr_term - splus_term - lin_term - con_term
 
     """#########################################################################
@@ -677,7 +690,7 @@ class mu_ssRBM(object):
         # proposal partition function with shape []/[...].
         logZA_term1 = 0.5 * tf.tensordot(self._bv**2, 1/(self._gamma+1e-8), [[-1], [0]])
         logZA_term2 = 0.5 * tf.reduce_sum(tf.log(2*np.pi/(self._gamma+1e-8)), axis=[-1])
-        logZA_term3 = 0.5 * tf.reduce_sum(tf.log(2*np.pi) - tf.log(1e-8), axis=[-1])
+        logZA_term3 = 0.5 * self._dimV * tf.reduce_sum(tf.log(2*np.pi) - tf.log(1e-8))
         logZA_term4 = tf.reduce_sum(tf.nn.softplus(self._bh), axis=-1)
         logZA = logZA_term1 + logZA_term2 + logZA_term3 + logZA_term4
 
@@ -693,10 +706,14 @@ class mu_ssRBM(object):
         betas = 0.5 * np.random.rand(levels) + 0.5
         betas.sort()
         sample, _, _, _, _, _ = self.GibbsSampling(V=sample, beta=0.0)
+        sample = tf.maximum(self._bound[0], sample)
+        sample = tf.minimum(self._bound[1], sample)
         # logwk is the weighted matrix.
         logwk = tf.zeros(shape=tf.shape(sample)[0:-1], dtype=tf.float32)
         for i in range(len(betas)):
             sample, _, _, _, _, _ = self.GibbsSampling(V=sample, beta=betas[i])
+            sample = tf.maximum(self._bound[0], sample)
+            sample = tf.minimum(self._bound[1], sample)
             # logp_k, logp_km1 shape [run, ...]
             logp_k = -self.FreeEnergy(V=sample, beta=betas[i])
             if i != 0:
@@ -706,6 +723,8 @@ class mu_ssRBM(object):
             logwk += logp_k - logp_km1
         # beta = 1.0
         sample, _, _, _, _, _ = self.GibbsSampling(V=sample, beta=1.0)
+        sample = tf.maximum(self._bound[0], sample)
+        sample = tf.minimum(self._bound[1], sample)
         logp_k = -self.FreeEnergy(V=sample, beta=1.0)
         logp_km1 = -self.FreeEnergy(V=sample, beta=betas[-1])
         logwk += logp_k - logp_km1
@@ -713,7 +732,8 @@ class mu_ssRBM(object):
         # compute the average weight. [...]
         log_wk_mean = tf.reduce_max(logwk, axis=0)
         r_ais = tf.reduce_mean(tf.exp(logwk - log_wk_mean), axis=0)
-        return logZA + tf.log(r_ais) + log_wk_mean
+        #return sample
+        return logZA + log_wk_mean + tf.log(r_ais)
 
     """#########################################################################
     add_constraint: compute the partition function by annealed importance sampling.
