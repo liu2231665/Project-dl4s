@@ -197,6 +197,9 @@ class binRBM(_RBM, object):
             # pll.
             _, _, _, Pv_h = self.GibbsSampling(self._V, beta=1.0, k=self._k)
             self._pll = dimV * BernoulliNLL(self._V, Pv_h)
+            # one step sample.
+            self.newV0, self.newH0, self.muH0, self.muV0 = \
+                self.GibbsSampling(self._V, k=1)
 
     """#########################################################################
     sampleVgivenH: the generative direction of the RBM.
@@ -318,6 +321,9 @@ class gaussRBM(_RBM, object):
             # pll.
             _, _, _, muV = self.GibbsSampling(self._V, beta=1.0, k=self._k)
             self._monitor = tf.reduce_mean(tf.reduce_sum((self._V - muV)**2, axis=[-1]))
+            # one step sample.
+            self.newV0, self.newH0, self.muH0, self.muV0 = \
+                self.GibbsSampling(self._V, k=1)
 
     """#########################################################################
     sampleHgivenV: the inference direction of the RBM.
@@ -415,6 +421,7 @@ class mu_ssRBM(object):
     __init__:the initialization function.
     input: dimV - the frame dimension of the input vector.
            dimH - the frame dimension of the latent state.
+           dimS - the frame dimension of S. (useless in current version)
            init_scale - the initial scale of system parameters.
            x - the input tensor that maybe provided by outer parts. None in
                default and the RBM will define its own input tensor.
@@ -424,6 +431,13 @@ class mu_ssRBM(object):
                default and the RBM will define its own visible bias.
            bh - the hidden bias that maybe provided by outer parts. None in
                default and the RBM will define its own hidden bias.
+           gamma - the precision parameter for V (Lambda in ICML paper.)
+           alpha - the precision parameter for S.
+           alphaTrain - indicate whether train alpha or set as hyper parameter.
+           mu - the mean parameter for S.
+           muTrain - indicate whether train mu or set as hyper parameter.
+           phi - the precision parameter of V modulated by H.
+           phiTrain - indicate whether train phi or set as hyper parameter.
            scope - using to define the variable_scope.
            k - Gibbs sampling steps.
     output: None.
@@ -435,7 +449,6 @@ class mu_ssRBM(object):
             init_scale,
             x=None,
             W=None,  # W.shape = [dimV, dimH]
-            Bound=(-1.0, 1.0),
             bv=None,
             bh=None,
             dimS=None,
@@ -449,8 +462,6 @@ class mu_ssRBM(object):
             scope=None,
             k=1
     ):
-        # <Tensorflow Session>.
-        self.bound = Bound
         self._sess = tf.Session()
         # the proposal distribution.
         self._k = k
@@ -519,8 +530,9 @@ class mu_ssRBM(object):
             self._V = x if x is not None else tf.placeholder(dtype=tf.float32, shape=[None, dimV], name='V')
             # <tensor placeholder> learning rate.
             self.lr = tf.placeholder(dtype='float32', shape=(), name='learningRate')
-            newH = self.GibbsSampling(self._V, k=k)[1]      # shape = [..., dimH]
-            newH = tf.expand_dims(newH, axis=2)
+            self.newV, self.newH, self.newS, self.muV, self.muH, self.muS = \
+                self.GibbsSampling(self._V, k=k)
+            newH = tf.expand_dims(self.newH, axis=2)
             W = tf.expand_dims(tf.expand_dims(self._W, axis=0), axis=0)
             term1 = newH * W / (self._alpha + 1e-8)
             term1 = tf.tensordot(term1, self._W, [[-1], [-1]])
@@ -530,8 +542,10 @@ class mu_ssRBM(object):
             self.PreV_h = term2 + term1
             self.CovV_h = tf.matrix_inverse(self.PreV_h)
             # define the monitor.
-            muV = self.GibbsSampling(self._V, k=k)[3]
-            monitor = tf.reduce_sum((self._V - muV) ** 2, axis=-1)
+            monitor = tf.reduce_sum((self._V - self.muV) ** 2, axis=-1)
+            # one step sample.
+            self.newV0, self.newH0, self.newS0, self.muV0, self.muH0, self.muS0 = \
+                self.GibbsSampling(self._V, k=1)
             self._monitor = tf.sqrt(tf.reduce_mean(monitor))
             #self._monitor = muV
 
@@ -544,11 +558,11 @@ class mu_ssRBM(object):
             meanH_v - the Bernoulli distribution P(H|V), which is also mean(H|V).
     #########################################################################"""
     def sampleHgivenV(self, V, beta=1.0):
-        factorV = tf.tensordot(V, beta * self._W, [[-1], [0]])  # shape = [..., dimH]
+        factorV = tf.tensordot(V, self._W, [[-1], [0]])  # shape = [..., dimH]
         sqr_term = (0.5 * factorV ** 2) / (self._alpha + 1e-8) \
-                   - 0.5 * tf.tensordot(V**2, beta * tf.transpose(self._phi), [[-1], [0]])
+                   - 0.5 * tf.tensordot(V**2, tf.transpose(self._phi), [[-1], [0]])
         lin_term = factorV * self._mu
-        meanH_v = tf.nn.sigmoid(sqr_term + lin_term + self._bh, name='meanH_v')
+        meanH_v = tf.nn.sigmoid(beta * (sqr_term + lin_term) + self._bh, name='meanH_v')
         newH = tf.distributions.Bernoulli(probs=meanH_v, dtype=tf.float32).sample()
         return newH, meanH_v
 
@@ -562,11 +576,15 @@ class mu_ssRBM(object):
     #########################################################################"""
     def sampleSgivenVH(self, V, H, beta=1.0):
         #
-        factorV = tf.tensordot(V, beta * self._W, [[-1], [0]]) / (self._alpha + 1e-8) + self._mu                       # shape = [..., dimH]
-        meanS_vh = factorV * H
-        eps = tf.truncated_normal(shape=(tf.shape(meanS_vh)))
-        newS = meanS_vh + tf.sqrt(self._alpha) * eps
-        return newS, meanS_vh
+        factorV = tf.tensordot(V, beta**2 * self._W, [[-1], [0]]) / (self._alpha + 1e-8)\
+                  + self._mu  # shape = [..., dimH]
+        meanS_vh1 = factorV
+        eps = tf.truncated_normal(shape=(tf.shape(meanS_vh1)))
+        if beta == 0.0:
+            newS = meanS_vh1 * H
+        else:
+            newS = meanS_vh1 * H + tf.sqrt(self._alpha / beta) * eps
+        return newS, meanS_vh1
 
     """#########################################################################
     sampleVgivenSH: the generative direction of the RBM by P(V|S, H).
@@ -620,11 +638,11 @@ class mu_ssRBM(object):
         lin_term = tf.tensordot(V, self._bv, [[-1], [0]])
         con_term = 0.5 * tf.reduce_sum(tf.log(2*np.pi) - tf.log(self._alpha + 1e-8))
         #
-        factorV = tf.tensordot(V, beta * self._W, [[-1], [0]])  # shape = [..., dimH]
+        factorV = tf.tensordot(V, self._W, [[-1], [0]])  # shape = [..., dimH]
         sqr_term_h = (0.5 * factorV ** 2) / (self._alpha + 1e-8) \
-                   - 0.5 * tf.tensordot(V ** 2, tf.transpose(beta * self._phi), [[-1], [0]])
+                   - 0.5 * tf.tensordot(V ** 2, tf.transpose(self._phi), [[-1], [0]])
         lin_term_h = factorV * self._mu
-        splus_term = tf.reduce_sum(tf.nn.softplus(sqr_term_h + lin_term_h + self._bh),
+        splus_term = tf.reduce_sum(tf.nn.softplus(beta * (sqr_term_h + lin_term_h) + self._bh),
                                    axis=[-1])
         return sqr_term - splus_term - lin_term - con_term
 
@@ -659,7 +677,276 @@ class mu_ssRBM(object):
         # proposal partition function with shape []/[...].
         logZA_term1 = 0.5 * tf.tensordot(self._bv**2, 1/(self._gamma+1e-8), [[-1], [0]])
         logZA_term2 = 0.5 * tf.reduce_sum(tf.log(2*np.pi/(self._gamma+1e-8)), axis=[-1])
-        logZA_term3 = 0.5 * tf.reduce_sum(tf.log(2*np.pi/(self._alpha+1e-8)), axis=[-1])
+        logZA_term3 = 0.5 * tf.reduce_sum(tf.log(2*np.pi) - tf.log(1e-8), axis=[-1])
+        logZA_term4 = tf.reduce_sum(tf.nn.softplus(self._bh), axis=-1)
+        logZA = logZA_term1 + logZA_term2 + logZA_term3 + logZA_term4
+
+        if Batch is not None and Seq is None:
+            sample = tf.zeros(shape=[run, Batch, self._dimV])
+        elif Batch is None and Seq is not None:
+            sample = tf.zeros(shape=[run, Seq, self._dimV])
+        elif Batch is not None and Seq is not None:
+            sample = tf.zeros(shape=[run, Batch, Seq, self._dimV])
+        else:
+            sample = tf.zeros(shape=[run, self._dimV])
+        # Define the intermediate levels.
+        betas = 0.5 * np.random.rand(levels) + 0.5
+        betas.sort()
+        sample, _, _, _, _, _ = self.GibbsSampling(V=sample, beta=0.0)
+        # logwk is the weighted matrix.
+        logwk = tf.zeros(shape=tf.shape(sample)[0:-1], dtype=tf.float32)
+        for i in range(len(betas)):
+            sample, _, _, _, _, _ = self.GibbsSampling(V=sample, beta=betas[i])
+            # logp_k, logp_km1 shape [run, ...]
+            logp_k = -self.FreeEnergy(V=sample, beta=betas[i])
+            if i != 0:
+                logp_km1 = -self.FreeEnergy(V=sample, beta=betas[i - 1])
+            else:
+                logp_km1 = -self.FreeEnergy(V=sample, beta=0.0)
+            logwk += logp_k - logp_km1
+        # beta = 1.0
+        sample, _, _, _, _, _ = self.GibbsSampling(V=sample, beta=1.0)
+        logp_k = -self.FreeEnergy(V=sample, beta=1.0)
+        logp_km1 = -self.FreeEnergy(V=sample, beta=betas[-1])
+        logwk += logp_k - logp_km1
+
+        # compute the average weight. [...]
+        log_wk_mean = tf.reduce_max(logwk, axis=0)
+        r_ais = tf.reduce_mean(tf.exp(logwk - log_wk_mean), axis=0)
+        return logZA + tf.log(r_ais) + log_wk_mean
+
+    """#########################################################################
+    add_constraint: compute the partition function by annealed importance sampling.
+    input: .
+    output: the tensor that assign the normalization to W.
+    #########################################################################"""
+    def add_constraint(self):
+        Wnorm = tf.stop_gradient(tf.norm(self._W, axis=0))
+        #mask = tf.minimum(1.0, Wnorm)
+        return tf.assign(self._W, self._W / Wnorm)
+
+
+"""#########################################################################
+Class: bin_ssRBM - the mu-pooled spike and slab Restricted Boltzmann Machine 
+                  for binary observations.
+#########################################################################"""
+class bin_ssRBM(object):
+    """#########################################################################
+    __init__:the initialization function.
+    input: dimV - the frame dimension of the input vector.
+           dimH - the frame dimension of the latent state.
+           dimS - the frame dimension of S. (useless in current version)
+           init_scale - the initial scale of system parameters.
+           x - the input tensor that maybe provided by outer parts. None in
+               default and the RBM will define its own input tensor.
+           W - the weight matrix that maybe provided by outer parts. None in
+               default and the RBM will define its own input tensor.
+           bv - the visible bias that maybe provided by outer parts. None in
+               default and the RBM will define its own visible bias.
+           bh - the hidden bias that maybe provided by outer parts. None in
+               default and the RBM will define its own hidden bias.
+           alpha - the precision parameter for S.
+           alphaTrain - indicate whether train alpha or set as hyper parameter.
+           mu - the mean parameter for S.
+           muTrain - indicate whether train mu or set as hyper parameter.
+           scope - using to define the variable_scope.
+           k - Gibbs sampling steps.
+    output: None.
+    #########################################################################"""
+    def __init__(
+            self,
+            dimV,
+            dimH,
+            init_scale,
+            x=None,
+            W=None,  # W.shape = [dimV, dimH]
+            bv=None,
+            bh=None,
+            dimS=None,
+            alpha=None,
+            alphaTrain=False,
+            mu=None,
+            muTrain=False,
+            scope=None,
+            k=1
+    ):
+        self._sess = tf.Session()
+        # the proposal distribution.
+        self._k = k
+        # Check whether the configuration is correct.
+        if x is not None and x.shape[-1] != dimV:
+            raise ValueError("You have provided a input tensor but the last shape is not equal to [dimV]!!")
+        if W is not None and (W.shape[0] != dimV or W.shape[1] != dimH):
+            raise ValueError("You have provided a W tensor but the shape is not equal to [dimV, dimH]!!")
+        if bv is not None and bv.shape[-1] != dimV:
+            raise ValueError("You have provided a bv tensor but the last shape is not equal to [dimV]!!")
+        if bh is not None and bh.shape[-1] != dimH:
+            raise ValueError("You have provided a bh tensor but the last shape is not equal to [dimH]!!")
+
+        self._dimV = dimV
+        self._dimH = dimH
+        self._dimS = dimS if dimS is not None else dimH
+        if scope is None:
+            self._scopeName = 'ssRBM'
+        else:
+            self._scopeName = scope
+        #
+        if alpha is not None and alpha.shape[-1] != self._dimS:
+            raise ValueError("You have provided a alpha tensor but the last shape is not equal to [dimS]!!")
+        if mu is not None and mu.shape[-1] != self._dimS:
+            raise ValueError("You have provided a alpha tensor but the last shape is not equal to [dimS]!!")
+        # create the system parameters.
+        initializer = tf.random_uniform_initializer(-init_scale, init_scale)
+        with tf.variable_scope(self._scopeName, initializer=initializer):
+            #
+            self._W = W if W is not None else tf.get_variable('W', shape=[dimV, dimH])
+            self._bv = bv if bv is not None else tf.get_variable('bv', shape=dimV, initializer=tf.zeros_initializer)
+            self._bh = bh if bh is not None else tf.get_variable('bh', shape=dimH, initializer=tf.zeros_initializer)
+            #
+            if alpha is not None:
+                self._alpha = alpha
+            else:
+                if alphaTrain:
+                    self._alpha = tf.exp(tf.get_variable('alpha', shape=self._dimS,
+                                                         initializer=tf.zeros_initializer))
+                else:
+                    self._alpha = tf.ones(shape=self._dimS, name='alpha')
+            #
+            if mu is not None:
+                self._mu = mu
+            else:
+                if muTrain:
+                    self._mu = tf.get_variable('mu', shape=self._dimS, initializer=tf.zeros_initializer)
+                else:
+                    self._mu = tf.zeros(shape=self._dimS, name='mu')
+            #
+            # x = [batch, steps, dimV]. O.w, we define it as non-temporal data with shape [batch,dimV].
+            self._V = x if x is not None else tf.placeholder(dtype=tf.float32, shape=[None, dimV], name='V')
+            # <tensor placeholder> learning rate.
+            self.lr = tf.placeholder(dtype='float32', shape=(), name='learningRate')
+            pass
+
+    """#########################################################################
+    sampleSgivenVH: the other inference direction of the RBM by P(S|V, H).
+    input: V - the input vector, could be [batch, dimV].
+           H - the spike vector, could be [batch, dimH].
+           beta - a scaling factor for AIS.
+    output: newS - the new slab latent states sampled from P(S|V, H).
+            meanS_vh - the meanS given V, H.
+    #########################################################################"""
+    def sampleSgivenVH(self, V, H, beta=1.0):
+        #
+        factorV = tf.tensordot(V, beta * self._W, [[-1], [0]]) / (self._alpha + 1e-8) + self._mu  # shape = [..., dimH]
+        meanS_vh1 = factorV
+        eps = tf.truncated_normal(shape=(tf.shape(meanS_vh1)))
+        newS = meanS_vh1 * H + tf.sqrt(self._alpha) * eps
+        return newS, meanS_vh1
+
+    """#########################################################################
+    sampleHgivenV: the inference direction of the RBM by P(H|V).
+    input: V - the input vector, could be [batch, dimV].
+           beta - a scaling factor for AIS.
+    output: newH - the new binary latent states sampled from P(H|V).
+            meanH_v - the Bernoulli distribution P(H|V), which is also mean(H|V).
+    #########################################################################"""
+    def sampleHgivenV(self, V, beta=1.0):
+        factorV = tf.tensordot(V, beta * self._W, [[-1], [0]])  # shape = [..., dimH]
+        sqr_term = (0.5 * factorV ** 2) / (self._alpha + 1e-8)
+        lin_term = factorV * self._mu
+        meanH_v = tf.nn.sigmoid(sqr_term + lin_term + self._bh, name='meanH_v')
+        newH = tf.distributions.Bernoulli(probs=meanH_v, dtype=tf.float32).sample()
+        return newH, meanH_v
+
+    """#########################################################################
+    sampleVgivenSH: the generative direction of the RBM by P(V|S, H).
+    input: S - the slab vector, could be [..., dimH].
+           H - the spike vector, could be [..., dimH].
+           beta - a scaling factor for AIS.
+    output: newV_sh - the new slab latent states sampled from P(V|S, H).
+            meanV_sh - the meanV given S, H.
+    #########################################################################"""
+    def sampleVgivenSH(self, S, H, beta=1.0):
+        probit =tf.tensordot(S * H, beta * tf.transpose(self._W), [[-1], [0]]) + self._bv
+        meanV_sh = tf.nn.sigmoid(probit, name='meanH_v')
+        newV_sh = tf.distributions.Bernoulli(probs=meanV_sh, dtype=tf.float32).sample()
+        # return newV_sh, meanV_sh
+        return newV_sh, meanV_sh
+
+    """#########################################################################
+    GibbsSampling: Gibbs sampling.
+    input: V - the input vector, could be [batch, dimV].
+           beta - a scaling factor for AIS.
+           k - the running times of the Gibbs sampling. 1 in default.
+    output: 
+    #########################################################################"""
+    def GibbsSampling(self, V, beta=1.0, k=1):
+        newV = V
+        newH = None
+        newS = None
+        meanH_v = None
+        meanS_vh = None
+        meanV_sh = None
+        if k < 1:
+            raise ValueError("k should be greater than zero!!")
+        for i in range(k):
+            newH, meanH_v = self.sampleHgivenV(newV, beta)
+            newS, meanS_vh = self.sampleSgivenVH(newV, newH, beta)
+            newV, meanV_sh = self.sampleVgivenSH(newS, newH, beta)
+        return newV, newH, newS, meanV_sh, meanH_v, meanS_vh
+
+    """#########################################################################
+    FreeEnergy: the free energy function.
+    input: V - the latent state, could be [batch, dimV].
+           beta - a scaling factor for AIS.
+    output: the average free energy per frame with shape [batch]
+    #########################################################################"""
+    def FreeEnergy(self, V, beta=1.0):
+        # TODO: change this term.
+        sqr_term = 0.5 * tf.tensordot(V ** 2, self._gamma, [[-1], [0]])
+        lin_term = tf.tensordot(V, self._bv, [[-1], [0]])
+        con_term = 0.5 * tf.reduce_sum(tf.log(2 * np.pi) - tf.log(self._alpha + 1e-8))
+        #
+        factorV = tf.tensordot(V, beta * self._W, [[-1], [0]])  # shape = [..., dimH]
+        sqr_term_h = (0.5 * factorV ** 2) / (self._alpha + 1e-8) \
+                     - 0.5 * tf.tensordot(V ** 2, tf.transpose(beta * self._phi), [[-1], [0]])
+        lin_term_h = factorV * self._mu
+        splus_term = tf.reduce_sum(tf.nn.softplus(sqr_term_h + lin_term_h + self._bh),
+                                   axis=[-1])
+        return sqr_term - splus_term - lin_term - con_term
+
+    """#########################################################################
+    ComputeLoss: define the loss of the log-likelihood with given proposal
+                Q. If we are going to introduce complicated model like VAE to be
+                the proposal. We should define the lower bound outer the class.
+    input: V - the latent state, could be [..., dimV].
+           samplesteps - the number of sample to be drawn. Default is 1.
+    output: the average loss per frame in tensor.
+    #########################################################################"""
+    def ComputeLoss(self, V, samplesteps=10):
+        # samples.shape = [..., dimV].
+        samples, _, _, _, _, _ = self.GibbsSampling(V=V, k=samplesteps)
+        samples = tf.stop_gradient(samples)
+        # negative phase with shape [samples].
+        negPhase = tf.reduce_mean(self.FreeEnergy(samples))
+        # positive phase with shape [batch].
+        posPhase = tf.reduce_mean(self.FreeEnergy(V))
+        return posPhase - negPhase
+
+    """#########################################################################
+    AIS: compute the partition function by annealed importance sampling.
+    input: run - the number of samples.
+           levels - the number of intermediate proposals.
+           samplesteps - the number of sample to be drawn. Default is 1.
+           Batch - indicate whether the parameter is batch.
+           Seq - indicate whether the parameter is batch.
+    output: the log partition function logZB in tensor.
+    #########################################################################"""
+    def AIS(self, run=10, levels=10, Batch=None, Seq=None):
+        # proposal partition function with shape []/[...].
+        # TODO: change this term.
+        logZA_term1 = 0.5 * tf.tensordot(self._bv ** 2, 1 / (self._gamma + 1e-8), [[-1], [0]])
+        logZA_term2 = 0.5 * tf.reduce_sum(tf.log(2 * np.pi / (self._gamma + 1e-8)), axis=[-1])
+        logZA_term3 = 0.5 * tf.reduce_sum(tf.log(2 * np.pi / (self._alpha + 1e-8)), axis=[-1])
         logZA_term4 = tf.reduce_sum(tf.nn.softplus(self._bh), axis=-1)
         logZA = logZA_term1 + logZA_term2 + logZA_term3 + logZA_term4
 
@@ -704,5 +991,5 @@ class mu_ssRBM(object):
     #########################################################################"""
     def add_constraint(self):
         Wnorm = tf.stop_gradient(tf.norm(self._W, axis=0))
-        #mask = tf.minimum(1.0, Wnorm)
+        # mask = tf.minimum(1.0, Wnorm)
         return tf.assign(self._W, self._W / Wnorm)

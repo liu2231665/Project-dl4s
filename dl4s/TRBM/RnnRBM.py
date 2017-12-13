@@ -191,6 +191,7 @@ class _RnnRBM(object):
     output: should be the sample.
     #########################################################################"""
     def gen_function(self, x=None, numSteps=None, gibbs=None):
+        newV = x
         with self._graph.as_default():
             if x is not None:
                 sample = x
@@ -198,10 +199,11 @@ class _RnnRBM(object):
                 sample = np.zeros(shape=(1, numSteps, self._dimInput))
             else:
                 raise ValueError("Neither input or numSteps is provided!!")
+            newV = sample
             k = gibbs if gibbs is not None else self._gibbs
-            newV= self._rbm.GibbsSampling(self.x, k=k)[0]
-            sample = self._sess.run(newV, feed_dict={self.x: sample})
-        return sample if x is not None else sample[0]
+            for i in range(k):
+                newV = self._sess.run(self._rbm.newV0, feed_dict={self.x: newV})
+        return newV if x is not None else newV[0]
 
     """#########################################################################
     hidden_function: generate the hidden activation of given X represented by
@@ -211,10 +213,12 @@ class _RnnRBM(object):
     output: P(H|V).
     #########################################################################"""
     def hidden_function(self, input, gibbs=None):
+        newV = input
         with self._graph.as_default():
             k = gibbs if gibbs is not None else self._gibbs
-            _, _, Ph_v, _ = self._rbm.GibbsSampling(self.x, k=k)
-        return self._sess.run(Ph_v, feed_dict={self.x: input})
+            for i in range(k-1):
+                newV = self._sess.run(self._rbm.newV0, feed_dict={self.x: newV})
+        return self._sess.run(self._rbm.muH0, feed_dict={self.x: newV})
 
     """#########################################################################
     full_train: define to fully train a model given the dataset.
@@ -447,7 +451,7 @@ class ssRNNRBM(_RnnRBM, object):
                 bht = tf.tensordot(dt, Wdh, [[-1], [0]]) + bh
                 bvt = tf.zeros(name='bv', shape=config.dimInput)
                 self._rbm = mu_ssRBM(dimV=config.dimInput, dimH=config.dimState,
-                                     init_scale=config.init_scale, Bound=Bound,
+                                     init_scale=config.init_scale,
                                      x=self.x, bv=bvt, bh=bht,
                                      alphaTrain=config.alphaTrain,
                                      muTrain=config.muTrain,
@@ -489,17 +493,20 @@ class ssRNNRBM(_RnnRBM, object):
             return self._sess.run(self.PreV_h, feed_dict={self.x: input})
 
     """#########################################################################
-    hidden_function: generate the hidden activation of given X represented by
-                     P(H|V).
+    sparse_hidden_function: generate the sparse hidden activation of given X
+                      represented by E(H*S|V).
     input: input - numerical input.
            gibbs - the number of gibbs sampling.
-    output: P(H|V).
+    output: E(H*S|V).
     #########################################################################"""
-    def hidden_function(self, input, gibbs=None):
+    def sparse_hidden_function(self, input, gibbs=None):
+        newV = input
         with self._graph.as_default():
             k = gibbs if gibbs is not None else self._gibbs
-            Ph_v = self._rbm.GibbsSampling(self.x, k=k)[4]
-        return self._sess.run(Ph_v, feed_dict={self.x: input})
+            for i in range(k - 1):
+                newV = self._sess.run(self._rbm.newV0, feed_dict={self.x: newV})
+        meanH, meanS = self._sess.run([self._rbm.muH0, self._rbm.muS0], feed_dict={self.x: newV})
+        return meanH * meanS
 
     """#########################################################################
     train_function: compute the monitor and update the tensor variables.
