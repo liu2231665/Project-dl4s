@@ -468,8 +468,8 @@ class ssRNNRBM(_RnnRBM, object):
             else:
                 self._logZ = self._NVIL_VAE(VAE, self._aisRun)  # X, logPz_X, logPx_Z, logPz, VAE.x
                 self.xx = tf.placeholder(dtype='float32', shape=[None, None, None, config.dimInput])
-                self.FreeEnergy = self._rbm.FreeEnergy(self.xx)
-                self._nll = self._rbm.FreeEnergy(self.x)
+                self.FEofSample = self._rbm.FreeEnergy(self.xx)
+                self.FEofInput = self._rbm.FreeEnergy(self.x)
                 self.VAE = VAE
             #
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
@@ -554,11 +554,6 @@ class ssRNNRBM(_RnnRBM, object):
         logPz_X = tf.reduce_sum(Pz_X.log_prob(VAE._Z), axis=[-1])     # shape = [batch, steps]
         logPx_Z = tf.reduce_sum(Px_Z.log_prob(X), axis=[-1])          # shape = [runs, batch, steps]
         logPz = tf.reduce_sum(Pz.log_prob(VAE._Z), axis=[-1])
-        # NegEnergy = -self._rbm.FreeEnergy(X)  # shape = [runs, batch, steps]
-        # logTerm = 2 * (NegEnergy + logPz_X - logPx_Z - logPz)
-        # logTerm_max = tf.reduce_max(logTerm, axis=0)
-        # r_ais = tf.reduce_mean(tf.exp(logTerm - logTerm_max), axis=0)
-        # return 0.5 * (tf.log(r_ais) + logTerm_max)
         return X, logPz_X, logPx_Z, logPz, VAE.x
 
     """#########################################################################
@@ -574,13 +569,13 @@ class ssRNNRBM(_RnnRBM, object):
             else:
                 X, logPz_X, logPx_Z, logPz = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
                 # shape = [runs, batch, steps]
-                NegEnergy = self._sess.run(self.FreeEnergy, feed_dict={self.xx: X, self.x: input})
-                logTerm = 2 * (NegEnergy + logPz_X - logPx_Z - logPz)
+                FEofSample = self._sess.run(self.FEofSample, feed_dict={self.xx: X, self.x: input})
+                logTerm = 2 * (-FEofSample + logPz_X - logPx_Z - logPz)
                 logTerm_max = np.max(logTerm, axis=0)
                 r_ais = np.mean(np.exp(logTerm - logTerm_max), axis=0)
                 logZ = 0.5 * (np.log(r_ais) + logTerm_max)
-                NegEnergyx = self._sess.run(self._nll, feed_dict={self.x: input})
-                loss_value = np.mean(NegEnergyx + logZ)
+                FEofInput = self._sess.run(self.FEofInput, feed_dict={self.x: input})
+                loss_value = np.mean(FEofInput + logZ)
         return loss_value
 
 """#########################################################################
