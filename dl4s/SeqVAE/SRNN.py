@@ -58,8 +58,8 @@ class _SRNN(object):
             # <list> collection of trainable parameters.
             self._params = []
             # components of the SRNN.
-            self._prior_mu, self._prior_sig, self._pos_mu, self._pos_sig, self._hidden_dec = \
-                buildSRNN(self.x, self._graph, config)
+            self._prior_mu, self._prior_sig, self._pos_mu, self._pos_sig, self._hidden_dec,\
+                self._Z = buildSRNN(self.x, self._graph, config)
             # the loss functions.
             self._loss = GaussKL(self._pos_mu, self._pos_sig ** 2, self._prior_mu, self._prior_sig ** 2)
             self._kl_divergence = self._loss

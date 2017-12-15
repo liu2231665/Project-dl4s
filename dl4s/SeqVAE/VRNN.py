@@ -57,7 +57,8 @@ class _VRNN(object):
             self._params = []
 
             self._prior_mu, self._prior_sig, self._pos_mu, \
-            self._pos_sig, self._hidden_dec, self._h_tm1, self._varCell = buildVRNN(self.x, self._graph, config)
+            self._pos_sig, self._hidden_dec, self._h_tm1, self._varCell,\
+                self._Z = buildVRNN(self.x, self._graph, config)
             self._loss = GaussKL(self._pos_mu, self._pos_sig ** 2, self._prior_mu, self._prior_sig ** 2)
             self._kl_divergence = self._loss
             # <pass> will be define in the children classes.

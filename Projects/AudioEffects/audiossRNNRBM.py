@@ -5,8 +5,9 @@ Descriptions: the code to train and run the ssRNNRBM
               under the "Audio Effect".
               ----2017.12.06
 #########################################################################"""
-from dl4s import ssRNNRBM
+from dl4s import ssRNNRBM, gaussSRNN
 from dl4s import configssRNNRBM as Config
+from dl4s import configSRNN
 from Projects.AudioEffects.fetchData import fetchData
 from Projects.AudioEffects.rmseTool import rmseGaussRNNRBM
 import os
@@ -28,12 +29,11 @@ Config.eventPath = './audiossRNNRBM/'
 Config.savePath = './audiossRNNRBM/'
 SAVETO = './audiossRNNRBM/historyaudio_ssRNNRBM.npz'
 
-Flag = 'training'                       # {'training'/'evaluation'}
+Flag = 'evaluation'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
-    Dataset = fetchData()
-
     if Flag == 'training':
+        Dataset = fetchData()
         # Check whether the target event path exists.
         if not os.path.exists(Config.eventPath):
             os.makedirs(Config.eventPath)
@@ -45,10 +45,27 @@ if __name__ == '__main__':
                        valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':
-        Config.aisLevel = 100
-        Config.aisRun = 20
+        #Dataset = fetchData()
+        Dataset = 0
+        configSRNN.Opt = 'Adam'
+        configSRNN.unitType = 'GRU'
+        configSRNN.mode = 'filter'
+        configSRNN.dimRecD = [500]
+        configSRNN.dimRecA = [500]
+        configSRNN.dimEnc = [400]
+        configSRNN.dimDec = [400]
+        configSRNN.dimMLPx = [400]
+        configSRNN.dimInput = 150
+        configSRNN.dimState = 500
+        configSRNN.init_scale = 0.01
+        configSRNN.eventPath = './audioSRNN-f/'
+        configSRNN.savePath = './audioSRNN-f/'
+        SAVETO = './audioSRNN-f/historyaudioSRNN-f.npz'
+        configSRNN.loadPath = configSRNN.savePath
+        SRNN = gaussSRNN(configSRNN)
+        Config.aisRun = 100
         Config.loadPath = Config.savePath
-        RnnRbm = ssRNNRBM(Config, Bound=(-25.0, 25.0))
+        RnnRbm = ssRNNRBM(Config, Bound=(-25.0, 25.0), VAE=SRNN)
         print('Evaluation: start computing the RMSE metric.')
         RMSE, NLL = rmseGaussRNNRBM(RnnRbm, Dataset['test'], batchSize=125)
         print('The testing reconstructed error is \x1b[1;91m%10.4f\x1b[0m.' % RMSE)

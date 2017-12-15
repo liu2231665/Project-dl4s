@@ -422,7 +422,7 @@ class varCell(tf.contrib.rnn.RNNCell):
             hidden_dec = self._mlpDec(tf.concat(axis=1, values=(zz, h_tm1)))
         # Unpdate the state.
         _, newState = self._rnn(tf.concat(axis=1, values=(xx, zz)), state)
-        return (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1), newState
+        return (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1, z), newState
 
     """
     zero_state: generate the zero initial state of the cells.
@@ -451,8 +451,8 @@ def buildVRNN(
 
         # run the whole model.
         state = allCell.zero_state(tf.shape(x)[0], dtype=tf.float32)
-        (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1), _ = tf.nn.dynamic_rnn(allCell, x, initial_state=state)
-        return prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1, allCell
+        (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1, z), _ = tf.nn.dynamic_rnn(allCell, x, initial_state=state)
+        return prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1, allCell, z
 
 
 """###############################################SRNN#####################################################"""
@@ -631,5 +631,5 @@ def buildSRNN(
         # the state space model cell.
         SSM = stoCell(Config)
         state = SSM.zero_state(tf.shape(x)[0], dtype=tf.float32)
-        (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec), _ = tf.nn.dynamic_rnn(SSM, tf.concat(axis=-1, values=(d_t, a_t)), initial_state=state)
-        return prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec
+        (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec), z = tf.nn.dynamic_rnn(SSM, tf.concat(axis=-1, values=(d_t, a_t)), initial_state=state)
+        return prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, z

@@ -318,6 +318,7 @@ class _RnnRBM(object):
                      testLoss=testLoss_avg, durationEpoch=durationEpoch)
         return
 
+
 """#########################################################################
 Class: binRnnRBM - the RNNRBM model for stochastic binary inputs.
 #########################################################################"""
@@ -432,7 +433,8 @@ class ssRNNRBM(_RnnRBM, object):
     def __init__(
             self,
             config=configssRNNRBM(),
-            Bound=(-1.0, 1.0)
+            Bound=(-25.0, 25.0),
+            VAE=None
     ):
         super().__init__(config)
         """build the graph"""
@@ -458,9 +460,18 @@ class ssRNNRBM(_RnnRBM, object):
                                      phiTrain=config.phiTrain,
                                      k=self._gibbs)
             self._loss = self._rbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
-            self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel, tf.shape(self.x)[0], tf.shape(self.x)[1])
-            #self._nll = self._logZ
-            self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
+            if VAE is None:
+                self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel,
+                                           tf.shape(self.x)[0], tf.shape(self.x)[1])
+                self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
+                self.VAE = VAE
+            else:
+                self._logZ = self._NVIL_VAE(VAE, self._aisRun)  # X, logPz_X, logPx_Z, logPz, VAE.x
+                self.xx = tf.placeholder(dtype='float32', shape=[None, None, None, config.dimInput])
+                self.FreeEnergy = self._rbm.FreeEnergy(self.xx)
+                self._nll = self._rbm.FreeEnergy(self.x)
+                self.VAE = VAE
+            #
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(self._loss)
             # add the computation of precision and covariance matrix of ssRBM.
@@ -521,6 +532,55 @@ class ssRNNRBM(_RnnRBM, object):
                                            feed_dict={self.x: input, self.lr: lrate})
             if self._scaleW is not None:
                 newW = self._sess.run(self._scaleW)
+        return loss_value
+
+    """#########################################################################
+    _NVIL_VAE: generate the graph to compute the NVIL upper bound of log Partition
+               function by a well-trained VAE.
+    input: VAE - the well-trained VAE(SRNN/VRNN).
+           runs - the number of sampling.
+    output: the upper boundLogZ.
+    #########################################################################"""
+    def _NVIL_VAE(self, VAE, runs=100):
+        # get the marginal and conditional distribution of the VAE.
+        mu, std = VAE._dec
+        Px_Z = tf.distributions.Normal(loc=mu, scale=std)
+        mu, std = VAE._enc
+        Pz_X = tf.distributions.Normal(loc=mu, scale=std)
+        mu, std = VAE._prior
+        Pz = tf.distributions.Normal(loc=mu, scale=std)
+        # generate the samples.
+        X = Px_Z.sample(sample_shape=runs)
+        logPz_X = tf.reduce_sum(Pz_X.log_prob(VAE._Z), axis=[-1])     # shape = [batch, steps]
+        logPx_Z = tf.reduce_sum(Px_Z.log_prob(X), axis=[-1])          # shape = [runs, batch, steps]
+        logPz = tf.reduce_sum(Pz.log_prob(VAE._Z), axis=[-1])
+        # NegEnergy = -self._rbm.FreeEnergy(X)  # shape = [runs, batch, steps]
+        # logTerm = 2 * (NegEnergy + logPz_X - logPx_Z - logPz)
+        # logTerm_max = tf.reduce_max(logTerm, axis=0)
+        # r_ais = tf.reduce_mean(tf.exp(logTerm - logTerm_max), axis=0)
+        # return 0.5 * (tf.log(r_ais) + logTerm_max)
+        return X, logPz_X, logPx_Z, logPz, VAE.x
+
+    """#########################################################################
+    ais_function: compute the approximated negative log-likelihood with partition
+                  function computed by annealed importance sampling.
+    input: input - numerical input.
+    output: the negative log-likelihood value.
+    #########################################################################"""
+    def ais_function(self, input):
+        with self._graph.as_default():
+            if self.VAE is None:
+                loss_value = self._sess.run(self._nll, feed_dict={self.x: input})
+            else:
+                X, logPz_X, logPx_Z, logPz = self.VAE._sess.run(self._logZ, feed_dict={self._logZ[-1]: input})
+                # shape = [runs, batch, steps]
+                NegEnergy = self.VAE._sess.run(self.FreeEnergy, feed_dict={self.xx: X})
+                logTerm = 2 * (NegEnergy + logPz_X - logPx_Z - logPz)
+                logTerm_max = np.max(logTerm, axis=0)
+                r_ais = np.mean(np.exp(logTerm - logTerm_max), axis=0)
+                logZ = 0.5 * (np.log(r_ais) + logTerm_max)
+                NegEnergyx = self.VAE._sess.run(self._nll, feed_dict={self.x: input})
+                loss_value = NegEnergyx + logZ
         return loss_value
 
 """#########################################################################
