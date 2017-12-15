@@ -369,11 +369,14 @@ class gaussRnnRBM(_RnnRBM, object):
     """#########################################################################
     __init__:the initialization function.
     input: Config - configuration class in ./utility.
+           VAE - if a well trained VAE is provided. Using NVIL to estimate the
+                 upper bound of the partition function.
     output: None.
     #########################################################################"""
     def __init__(
             self,
-            config=configRNNRBM()
+            config=configRNNRBM(),
+            VAE=None
     ):
         super().__init__(config)
         with self._graph.as_default():
@@ -400,6 +403,17 @@ class gaussRnnRBM(_RnnRBM, object):
                                    x=self.x, bv=bvt, bh=bht, std=stdt, k=self._gibbs)
             # the training loss is per frame.
             self._loss = self._rbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
+            if VAE is None:
+                self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel,
+                                           tf.shape(self.x)[0], tf.shape(self.x)[1])
+                self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
+                self.VAE = VAE
+            else:
+                self._logZ = self._NVIL_VAE(VAE, self._aisRun)  # X, logPz_X, logPx_Z, logPz, VAE.x
+                self.xx = tf.placeholder(dtype='float32', shape=[None, None, None, config.dimInput])
+                self.FEofSample = self._rbm.FreeEnergy(self.xx)
+                self.FEofInput = self._rbm.FreeEnergy(self.x)
+                self.VAE = VAE
             self._monitor = self._rbm._monitor
             self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel, tf.shape(self.x)[0], tf.shape(self.x)[1])
             self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
@@ -419,6 +433,50 @@ class gaussRnnRBM(_RnnRBM, object):
                                            feed_dict={self.x: input, self.lr: lrate})
         return loss_value
 
+    """#########################################################################
+    _NVIL_VAE: generate the graph to compute the NVIL upper bound of log Partition
+               function by a well-trained VAE.
+    input: VAE - the well-trained VAE(SRNN/VRNN).
+           runs - the number of sampling.
+    output: the upper boundLogZ.
+    #########################################################################"""
+    def _NVIL_VAE(self, VAE, runs=100):
+        # get the marginal and conditional distribution of the VAE.
+        mu, std = VAE._dec
+        Px_Z = tf.distributions.Normal(loc=mu, scale=std)
+        mu, std = VAE._enc
+        Pz_X = tf.distributions.Normal(loc=mu, scale=std)
+        mu, std = VAE._prior
+        Pz = tf.distributions.Normal(loc=mu, scale=std)
+        # generate the samples.
+        X = Px_Z.sample(sample_shape=runs)
+        logPz_X = tf.reduce_sum(Pz_X.log_prob(VAE._Z), axis=[-1])  # shape = [batch, steps]
+        logPx_Z = tf.reduce_sum(Px_Z.log_prob(X), axis=[-1])  # shape = [runs, batch, steps]
+        logPz = tf.reduce_sum(Pz.log_prob(VAE._Z), axis=[-1])
+        return X, logPz_X, logPx_Z, logPz, VAE.x
+
+    """#########################################################################
+    ais_function: compute the approximated negative log-likelihood with partition
+                  function computed by annealed importance sampling.
+    input: input - numerical input.
+    output: the negative log-likelihood value.
+    #########################################################################"""
+    def ais_function(self, input):
+        with self._graph.as_default():
+            if self.VAE is None:
+                loss_value = self._sess.run(self._nll, feed_dict={self.x: input})
+            else:
+                X, logPz_X, logPx_Z, logPz = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
+                # shape = [runs, batch, steps]
+                FEofSample = self._sess.run(self.FEofSample, feed_dict={self.xx: X, self.x: input})
+                logTerm = 2 * (-FEofSample + logPz_X - logPx_Z - logPz)
+                logTerm_max = np.max(logTerm, axis=0)
+                r_ais = np.mean(np.exp(logTerm - logTerm_max), axis=0)
+                logZ = 0.5 * (np.log(r_ais) + logTerm_max)
+                FEofInput = self._sess.run(self.FEofInput, feed_dict={self.x: input})
+                loss_value = np.mean(FEofInput + logZ)
+        return loss_value
+
 """#########################################################################
 Class: ssRNNRBM - the RNNRBM model for stochastic continuous inputs
                      with spike-and-slab RBM components.
@@ -428,6 +486,8 @@ class ssRNNRBM(_RnnRBM, object):
     __init__:the initialization function.
     input: Config - configuration class in ./utility.
            Bound - the maximum norm of the observation frames.
+           VAE - if a well trained VAE is provided. Using NVIL to estimate the
+                 upper bound of the partition function.
     output: None.
     #########################################################################"""
     def __init__(

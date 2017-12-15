@@ -46,7 +46,6 @@ if __name__ == '__main__':
 
     if Flag == 'evaluation':
         Dataset = fetchData()
-        #Dataset = 0
         configSRNN.Opt = 'Adam'
         configSRNN.unitType = 'GRU'
         configSRNN.mode = 'filter'
