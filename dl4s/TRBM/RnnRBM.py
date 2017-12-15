@@ -572,15 +572,15 @@ class ssRNNRBM(_RnnRBM, object):
             if self.VAE is None:
                 loss_value = self._sess.run(self._nll, feed_dict={self.x: input})
             else:
-                X, logPz_X, logPx_Z, logPz = self.VAE._sess.run(self._logZ, feed_dict={self._logZ[-1]: input})
+                X, logPz_X, logPx_Z, logPz = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
                 # shape = [runs, batch, steps]
-                NegEnergy = self.VAE._sess.run(self.FreeEnergy, feed_dict={self.xx: X})
+                NegEnergy = self._sess.run(self.FreeEnergy, feed_dict={self.xx: X, self.x: input})
                 logTerm = 2 * (NegEnergy + logPz_X - logPx_Z - logPz)
                 logTerm_max = np.max(logTerm, axis=0)
                 r_ais = np.mean(np.exp(logTerm - logTerm_max), axis=0)
                 logZ = 0.5 * (np.log(r_ais) + logTerm_max)
-                NegEnergyx = self.VAE._sess.run(self._nll, feed_dict={self.x: input})
-                loss_value = NegEnergyx + logZ
+                NegEnergyx = self._sess.run(self._nll, feed_dict={self.x: input})
+                loss_value = np.mean(NegEnergyx + logZ)
         return loss_value
 
 """#########################################################################

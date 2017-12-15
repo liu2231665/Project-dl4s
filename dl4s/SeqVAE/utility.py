@@ -152,8 +152,8 @@ class stornCell(tf.contrib.rnn.RNNCell):
                 Wz_sig = tf.get_variable('Wr_sig', shape=(self._dimReg[-1], self._dimState))
                 bz_sig = tf.get_variable('br_sig', shape=self._dimState, initializer=tf.zeros_initializer)
                 # compute the [muZ, sigmaZ] of P(Z|X) with shape (batch, state)
-                muZ = tf.matmul(hr_t, Wz_mu) + bz_mu
-                sigZ = tf.nn.softplus(tf.matmul(hr_t, Wz_sig) + bz_sig) + 1e-8
+                muZ = tf.tensordot(hr_t, Wz_mu, [[-1], [0]]) + bz_mu
+                sigZ = tf.nn.softplus(tf.tensordot(hr_t, Wz_sig, [[-1], [0]]) + bz_sig) + 1e-8
                 # generate the sample Z_t.
                 # eps is the r.v of standard normal distribution with shape (batch, state)
                 eps = tf.distributions.Normal(loc=0.0, scale=1.0
@@ -399,15 +399,15 @@ class varCell(tf.contrib.rnn.RNNCell):
         initializer = tf.random_uniform_initializer(-self._init_scale, self._init_scale)
         with tf.variable_scope('prior', initializer=initializer):
             # compute the mean and variance of P(Z) based on h_{t-1}
-            prior_mu = tf.matmul(h_tm1, self._Wp_mu) + self._bp_mu
-            prior_sig = tf.nn.softplus(tf.matmul(h_tm1, self._Wp_sig) + self._bp_sig) + 1e-8
+            prior_mu = tf.tensordot(h_tm1, self._Wp_mu, [[-1], [0]]) + self._bp_mu
+            prior_sig = tf.nn.softplus(tf.tensordot(h_tm1, self._Wp_sig, [[-1], [0]]) + self._bp_sig) + 1e-8
         # Compute the encoder.
         with tf.variable_scope('encoder', initializer=initializer):
             xx = self._mlpx(x)
             hidden_enc = self._mlpEnc(tf.concat(axis=1, values=(xx, h_tm1)))
             # compute the mean and variance of the posterior P(Z|X).
-            pos_mu = tf.matmul(hidden_enc, self._Wenc_mu) + self._benc_mu
-            pos_sig = tf.nn.softplus(tf.matmul(hidden_enc, self._Wenc_sig) + self._benc_sig) + 1e-8
+            pos_mu = tf.tensordot(hidden_enc, self._Wenc_mu, [[-1], [0]]) + self._benc_mu
+            pos_sig = tf.nn.softplus(tf.tensordot(hidden_enc, self._Wenc_sig, [[-1], [0]]) + self._benc_sig) + 1e-8
 
         # sample Z from the posterior.
         eps = tf.distributions.Normal(loc=0.0, scale=1.0
@@ -547,15 +547,15 @@ class stoCell(tf.contrib.rnn.RNNCell):
         with tf.variable_scope('prior'):
             # compute the mean and std of P(Z) based on [Z{t-1}, d_{t-1}]
             d_tm1 = x[:, 0:self._dimDt]
-            prior_mu = tf.matmul(tf.concat(axis=1, values=(state, d_tm1)), self._Wp_mu) + self._bp_mu
-            prior_sig = tf.nn.softplus(tf.matmul(tf.concat(axis=1, values=(state, d_tm1))
-                                                 , self._Wp_sig) + self._bp_sig) + 1e-8
+            prior_mu = tf.tensordot(tf.concat(axis=1, values=(state, d_tm1)), self._Wp_mu, [[-1], [0]]) + self._bp_mu
+            prior_sig = tf.nn.softplus(tf.tensordot(tf.concat(axis=1, values=(state, d_tm1))
+                                                 , self._Wp_sig, [[-1], [0]]) + self._bp_sig) + 1e-8
         with tf.variable_scope('encoder'):
             # build post mean and std of the inference network by NN(Z{t-1}, at)
             a_t = x[:, self._dimDt:]
             actPos = self._encoder(tf.concat(axis=1, values=(state, a_t)))
-            pos_mu = tf.matmul(actPos, self._Wpos_mu) + self._bpos_mu
-            pos_sig = tf.nn.softplus(tf.matmul(actPos, self._Wpos_sig) + self._bpos_sig) + 1e-8
+            pos_mu = tf.tensordot(actPos, self._Wpos_mu, [[-1], [0]]) + self._bpos_mu
+            pos_sig = tf.nn.softplus(tf.tensordot(actPos, self._Wpos_sig, [[-1], [0]]) + self._bpos_sig) + 1e-8
             # sample Z/NewSate from the posterior.
             eps = tf.distributions.Normal(loc=0.0, scale=1.0
                                           ).sample(sample_shape=(tf.shape(x)[0], self._dimState))
@@ -567,7 +567,7 @@ class stoCell(tf.contrib.rnn.RNNCell):
             # Compute the decoder with input = [Z{t}, d{t}]
             hidden_dec = self._decoder(tf.concat(axis=1, values=(z, d_tm1)))
 
-        return (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec), z
+        return (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, z), z
 
     """
     zero_state: generate the zero initial state of the cells.
@@ -590,7 +590,7 @@ class stoCell(tf.contrib.rnn.RNNCell):
         else:
             temp = self._dimState + self._dimDt
         return (self._dimState, self._dimState, self._dimState, self._dimState,
-                temp)
+                temp, self._dimState)
 
 
 """#########################################################################
@@ -631,5 +631,5 @@ def buildSRNN(
         # the state space model cell.
         SSM = stoCell(Config)
         state = SSM.zero_state(tf.shape(x)[0], dtype=tf.float32)
-        (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec), z = tf.nn.dynamic_rnn(SSM, tf.concat(axis=-1, values=(d_t, a_t)), initial_state=state)
+        (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, z), _ = tf.nn.dynamic_rnn(SSM, tf.concat(axis=-1, values=(d_t, a_t)), initial_state=state)
         return prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, z

@@ -45,8 +45,8 @@ if __name__ == '__main__':
                        valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':
-        #Dataset = fetchData()
-        Dataset = 0
+        Dataset = fetchData()
+        #Dataset = 0
         configSRNN.Opt = 'Adam'
         configSRNN.unitType = 'GRU'
         configSRNN.mode = 'filter'
@@ -67,7 +67,7 @@ if __name__ == '__main__':
         Config.loadPath = Config.savePath
         RnnRbm = ssRNNRBM(Config, Bound=(-25.0, 25.0), VAE=SRNN)
         print('Evaluation: start computing the RMSE metric.')
-        RMSE, NLL = rmseGaussRNNRBM(RnnRbm, Dataset['test'], batchSize=125)
+        RMSE, NLL = rmseGaussRNNRBM(RnnRbm, Dataset['test'], batchSize=25)
         print('The testing reconstructed error is \x1b[1;91m%10.4f\x1b[0m.' % RMSE)
         print('The testing reconstructed NLL is \x1b[1;91m%10.4f\x1b[0m.' % NLL)
 
