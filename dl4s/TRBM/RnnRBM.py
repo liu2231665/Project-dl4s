@@ -381,8 +381,8 @@ class binRnnRBM(_RnnRBM, object):
     #########################################################################"""
     def _NVIL_VAE(self, VAE, runs=100):
         # get the marginal and conditional distribution of the VAE.
-        mu = VAE._dec
-        Px_Z = tf.distributions.Bernoulli(probs=mu)
+        probs = VAE._dec
+        Px_Z = tf.distributions.Bernoulli(probs=probs, dtype=tf.float32)
         mu, std = VAE._enc
         Pz_X = tf.distributions.Normal(loc=mu, scale=std)
         mu, std = VAE._prior
@@ -390,7 +390,7 @@ class binRnnRBM(_RnnRBM, object):
         # generate the samples.
         X = Px_Z.sample(sample_shape=runs)
         logPz_X = tf.reduce_sum(Pz_X.log_prob(VAE._Z), axis=[-1])  # shape = [batch, steps]
-        logPx_Z = tf.reduce_sum(Px_Z.log_prob(X), axis=[-1])  # shape = [runs, batch, steps]
+        logPx_Z = tf.reduce_sum((1 - X) * tf.log(tf.minimum(1.0, 1.01 - probs)) + X * tf.log(tf.minimum(1.0, probs + 0.01)), axis=[-1])  # shape = [runs, batch, steps]
         logPz = tf.reduce_sum(Pz.log_prob(VAE._Z), axis=[-1])
         return X, logPz_X, logPx_Z, logPz, VAE.x
 

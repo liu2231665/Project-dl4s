@@ -15,7 +15,7 @@ import os
 Config.Opt = 'SGD'
 Config.unitType = 'GRU'
 Config.aisLevel = 5000
-Config.aisRun = 20
+Config.aisRun = 100
 Config.dimRec = [500]
 Config.dimMlp = [400, 400]
 Config.dimInput = 128
