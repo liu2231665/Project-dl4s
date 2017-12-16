@@ -415,8 +415,6 @@ class gaussRnnRBM(_RnnRBM, object):
                 self.FEofInput = self._rbm.FreeEnergy(self.x)
                 self.VAE = VAE
             self._monitor = self._rbm._monitor
-            self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel, tf.shape(self.x)[0], tf.shape(self.x)[1])
-            self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(self._loss)
             self._runSession()
