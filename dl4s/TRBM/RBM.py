@@ -844,7 +844,13 @@ class bin_ssRBM(object):
             self._V = x if x is not None else tf.placeholder(dtype=tf.float32, shape=[None, dimV], name='V')
             # <tensor placeholder> learning rate.
             self.lr = tf.placeholder(dtype='float32', shape=(), name='learningRate')
-            pass
+            self.newV, self.newH, self.newS, self.muV, self.muH, self.muS = \
+                self.GibbsSampling(self._V, k=k)
+            # define the monitor.
+            self._monitor = BernoulliNLL(self._V, self.muV) * dimV
+            # one step sample.
+            self.newV0, self.newH0, self.newS0, self.muV0, self.muH0, self.muS0 = \
+                self.GibbsSampling(self._V, k=1)
 
     """#########################################################################
     sampleSgivenVH: the other inference direction of the RBM by P(S|V, H).
@@ -921,18 +927,16 @@ class bin_ssRBM(object):
     output: the average free energy per frame with shape [batch]
     #########################################################################"""
     def FreeEnergy(self, V, beta=1.0):
-        # TODO: change this term.
-        sqr_term = 0.5 * tf.tensordot(V ** 2, self._gamma, [[-1], [0]])
+        #
         lin_term = tf.tensordot(V, self._bv, [[-1], [0]])
         con_term = 0.5 * tf.reduce_sum(tf.log(2 * np.pi) - tf.log(self._alpha + 1e-8))
         #
         factorV = tf.tensordot(V, beta * self._W, [[-1], [0]])  # shape = [..., dimH]
-        sqr_term_h = (0.5 * factorV ** 2) / (self._alpha + 1e-8) \
-                     - 0.5 * tf.tensordot(V ** 2, tf.transpose(beta * self._phi), [[-1], [0]])
+        sqr_term_h = (0.5 * factorV ** 2) / (self._alpha + 1e-8)
         lin_term_h = factorV * self._mu
         splus_term = tf.reduce_sum(tf.nn.softplus(sqr_term_h + lin_term_h + self._bh),
                                    axis=[-1])
-        return sqr_term - splus_term - lin_term - con_term
+        return -splus_term - lin_term - con_term
 
     """#########################################################################
     ComputeLoss: define the loss of the log-likelihood with given proposal
@@ -963,12 +967,9 @@ class bin_ssRBM(object):
     #########################################################################"""
     def AIS(self, run=10, levels=10, Batch=None, Seq=None):
         # proposal partition function with shape []/[...].
-        # TODO: change this term.
-        logZA_term1 = 0.5 * tf.tensordot(self._bv ** 2, 1 / (self._gamma + 1e-8), [[-1], [0]])
-        logZA_term2 = 0.5 * tf.reduce_sum(tf.log(2 * np.pi / (self._gamma + 1e-8)), axis=[-1])
-        logZA_term3 = 0.5 * tf.reduce_sum(tf.log(2 * np.pi / (self._alpha + 1e-8)), axis=[-1])
-        logZA_term4 = tf.reduce_sum(tf.nn.softplus(self._bh), axis=-1)
-        logZA = logZA_term1 + logZA_term2 + logZA_term3 + logZA_term4
+        logZA_term1 = tf.reduce_sum(tf.nn.softplus(self._bv), axis=-1)
+        logZA_term2 = tf.reduce_sum(tf.nn.softplus(self._bh), axis=-1)
+        logZA = logZA_term1 + logZA_term2
 
         if Batch is not None and Seq is None:
             sample = tf.zeros(shape=[run, Batch, self._dimV])

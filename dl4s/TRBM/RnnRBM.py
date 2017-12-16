@@ -6,7 +6,7 @@ Descriptions: the file contains the model description of RNN-RBM.
 #########################################################################"""
 from dl4s.TRBM import configRNNRBM, configssRNNRBM
 from dl4s.SeqVAE.utility import buildRec, MLP
-from dl4s.TRBM.RBM import binRBM, gaussRBM, mu_ssRBM
+from dl4s.TRBM.RBM import binRBM, gaussRBM, mu_ssRBM, bin_ssRBM
 from dl4s.tools import get_batches_idx
 import tensorflow as tf
 import numpy as np
@@ -568,7 +568,7 @@ class ssRNNRBM(_RnnRBM, object):
                 bvt = tf.zeros(name='bv', shape=config.dimInput)
                 self._rbm = mu_ssRBM(dimV=config.dimInput, dimH=config.dimState,
                                      init_scale=config.init_scale,
-                                     x=self.x, bv=bvt, bh=bht,
+                                     x=self.x, bv=bvt, bh=bht, bound=Bound,
                                      alphaTrain=config.alphaTrain,
                                      muTrain=config.muTrain,
                                      phiTrain=config.phiTrain,
@@ -697,4 +697,137 @@ Class: binssRNNRBM - the RNNRBM model for stochastic binary inputs
                      with spike-and-slab RBM components.
 #########################################################################"""
 class binssRNNRBM(_RnnRBM, object):
-    pass
+    """#########################################################################
+        __init__:the initialization function.
+        input: Config - configuration class in ./utility.
+               VAE - if a well trained VAE is provided. Using NVIL to estimate the
+                     upper bound of the partition function.
+        output: None.
+        #########################################################################"""
+
+    def __init__(
+            self,
+            config=configssRNNRBM(),
+            VAE=None
+    ):
+        super().__init__(config)
+        """build the graph"""
+        with self._graph.as_default():
+            # d_t = [batch, steps, hidden]
+            self._mlp = MLP(config.init_scale, config.dimInput, config.dimMlp, config.mlpType)
+            state = self._rnnCell.zero_state(tf.shape(self.x)[0], dtype=tf.float32)
+            d, _ = tf.nn.dynamic_rnn(self._rnnCell, self._mlp(self.x), initial_state=state)
+            paddings = tf.constant([[0, 0], [1, 0], [0, 0]])
+            dt = tf.pad(d[:, 0:-1, :], paddings)
+            initializer = tf.random_uniform_initializer(-config.init_scale, config.init_scale)
+            with tf.variable_scope("ssRBM", initializer=initializer):
+                # in ssRNNRBM, the feedback influences only the bias of H.
+                bh = tf.get_variable('bh', shape=config.dimState, initializer=tf.zeros_initializer)
+                Wdh = tf.get_variable('Wdh', shape=[config.dimRec[-1], config.dimState])
+                bht = tf.tensordot(dt, Wdh, [[-1], [0]]) + bh
+                bvt = tf.zeros(name='bv', shape=config.dimInput)
+                self._rbm = bin_ssRBM(dimV=config.dimInput, dimH=config.dimState,
+                                     init_scale=config.init_scale,
+                                     x=self.x, bv=bvt, bh=bht,
+                                     alphaTrain=config.alphaTrain,
+                                     muTrain=config.muTrain,
+                                     k=self._gibbs)
+            self._loss = self._rbm.ComputeLoss(V=self.x, samplesteps=self._gibbs)
+            if VAE is None:
+                self._logZ = self._rbm.AIS(self._aisRun, self._aisLevel,
+                                           tf.shape(self.x)[0], tf.shape(self.x)[1])
+                self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
+                self.VAE = VAE
+            else:
+                self._logZ = self._NVIL_VAE(VAE, self._aisRun)  # X, logPz_X, logPx_Z, logPz, VAE.x
+                self.xx = tf.placeholder(dtype='float32', shape=[None, None, None, config.dimInput])
+                self.FEofSample = self._rbm.FreeEnergy(self.xx)
+                self.FEofInput = self._rbm.FreeEnergy(self.x)
+                self.VAE = VAE
+                pass
+            #
+            self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+            self._train_step = self._optimizer.minimize(self._loss)
+            # add the monitor
+            self._monitor = self._rbm._monitor
+            # add the scaling operation of W.
+            if config.W_Norm:
+                self._scaleW = self._rbm.add_constraint()
+            else:
+                self._scaleW = None
+            self._runSession()
+
+    """#########################################################################
+    sparse_hidden_function: generate the sparse hidden activation of given X
+                      represented by E(H*S|V).
+    input: input - numerical input.
+           gibbs - the number of gibbs sampling.
+    output: E(H*S|V).
+    #########################################################################"""
+    def sparse_hidden_function(self, input, gibbs=None):
+        newV = input
+        with self._graph.as_default():
+            k = gibbs if gibbs is not None else self._gibbs
+            for i in range(k - 1):
+                newV = self._sess.run(self._rbm.newV0, feed_dict={self.x: newV})
+        meanH, meanS = self._sess.run([self._rbm.muH0, self._rbm.muS0], feed_dict={self.x: newV})
+        return meanH * meanS
+
+    """#########################################################################
+    _NVIL_VAE: generate the graph to compute the NVIL upper bound of log Partition
+               function by a well-trained VAE.
+    input: VAE - the well-trained VAE(SRNN/VRNN).
+           runs - the number of sampling.
+    output: the upper boundLogZ.
+    #########################################################################"""
+    def _NVIL_VAE(self, VAE, runs=100):
+        # get the marginal and conditional distribution of the VAE.
+        probs = VAE._dec
+        Px_Z = tf.distributions.Bernoulli(probs=probs, dtype=tf.float32)
+        mu, std = VAE._enc
+        Pz_X = tf.distributions.Normal(loc=mu, scale=std)
+        mu, std = VAE._prior
+        Pz = tf.distributions.Normal(loc=mu, scale=std)
+        # generate the samples.
+        X = Px_Z.sample(sample_shape=runs)
+        logPz_X = tf.reduce_sum(Pz_X.log_prob(VAE._Z), axis=[-1])  # shape = [batch, steps]
+        logPx_Z = tf.reduce_sum(
+            (1 - X) * tf.log(tf.minimum(1.0, 1.01 - probs)) + X * tf.log(tf.minimum(1.0, probs + 0.01)),
+            axis=[-1])  # shape = [runs, batch, steps]
+        logPz = tf.reduce_sum(Pz.log_prob(VAE._Z), axis=[-1])
+        return X, logPz_X, logPx_Z, logPz, VAE.x
+
+    """#########################################################################
+    ais_function: compute the approximated negative log-likelihood with partition
+                  function computed by annealed importance sampling.
+    input: input - numerical input.
+    output: the negative log-likelihood value.
+    #########################################################################"""
+    def ais_function(self, input):
+        with self._graph.as_default():
+            if self.VAE is None:
+                loss_value = self._sess.run(self._nll, feed_dict={self.x: input})
+            else:
+                X, logPz_X, logPx_Z, logPz = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
+                # shape = [runs, batch, steps]
+                FEofSample = self._sess.run(self.FEofSample, feed_dict={self.xx: X, self.x: input})
+                logTerm = 2 * (-FEofSample + logPz_X - logPx_Z - logPz)
+                logTerm_max = np.max(logTerm, axis=0)
+                r_ais = np.mean(np.exp(logTerm - logTerm_max), axis=0)
+                logZ = 0.5 * (np.log(r_ais) + logTerm_max)
+                FEofInput = self._sess.run(self.FEofInput, feed_dict={self.x: input})
+                loss_value = np.mean(FEofInput + logZ)
+        return loss_value
+
+    """#########################################################################
+    val_function: compute the validation loss with given input.
+    input: input - numerical input.
+    output: the bound of -log P(x).
+    #########################################################################"""
+    def val_function(self, input):
+        if self.VAE is not None:
+            return self.ais_function(input)
+        else:
+            with self._graph.as_default():
+                loss_value = self._sess.run(self._monitor, feed_dict={self.x: input})
+            return loss_value
