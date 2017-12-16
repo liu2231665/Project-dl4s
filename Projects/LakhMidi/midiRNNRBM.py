@@ -6,8 +6,9 @@ Descriptions: the code to train and run the binRNNRBM from dl4s.TRBM
               ----2017.11.23
 #########################################################################"""
 from Projects.LakhMidi.fetchData import fetchData
-from dl4s import binRnnRBM
+from dl4s import binRnnRBM, binSRNN
 from dl4s import configRNNRBM as Config
+from dl4s import configSRNN
 from Projects.LakhMidi.accTool import accRBM
 import os
 
@@ -44,9 +45,24 @@ if __name__ == '__main__':
                           valid_batchSize=25, saveto=SAVETO)
 
     if Flag == 'evaluation':
-        Config.loadPath = os.path.join(Config.savePath, 'RNNRBM')
         Dataset = fetchData()
-        RnnRbm = binRnnRBM(Config)
+        configSRNN.Opt = 'SGD'
+        configSRNN.unitType = 'GRU'
+        configSRNN.mode = 'smooth'
+        configSRNN.dimRecD = [500]
+        configSRNN.dimRecA = [500]
+        configSRNN.dimEnc = [400]
+        configSRNN.dimDec = [400]
+        configSRNN.dimMLPx = [400]
+        configSRNN.dimInput = 128
+        configSRNN.dimState = 500
+        configSRNN.init_scale = 0.01
+        configSRNN.eventPath = './binSRNN-s/'
+        configSRNN.savePath = './binSRNN-s/'
+        configSRNN.loadPath = os.path.join(configSRNN.savePath, 'SRNN-s')
+        SRNN = binSRNN(configSRNN)
+        Config.loadPath = os.path.join(Config.savePath, 'RNNRBM')
+        RnnRbm = binRnnRBM(Config, VAE=SRNN)
         print('Evaluation: start computing the accuracy metric.')
         ACC, NLL = accRBM(RnnRbm, Dataset['test'], batchSize=25)
         print('The testing transcription accuracy is \x1b[1;91m%10.4f\x1b[0m.' % ACC)
