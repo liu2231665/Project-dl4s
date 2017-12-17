@@ -6,6 +6,7 @@ Descriptions: the code to train and run the SRNN
               ----2017.11.28
 #########################################################################"""
 from dl4s import gaussSRNN
+from dl4s import full_train
 from dl4s import configSRNN as Config
 from Projects.AudioEffects.fetchData import fetchData
 from Projects.AudioEffects.rmseTool import rmseRNN
@@ -41,7 +42,7 @@ if __name__ == '__main__':
         SRNN = gaussSRNN(Config)
         # SRNN.full_train(dataset=Dataset, maxEpoch=280, batchSize=125, earlyStop=10, learning_rate=0.00001, for smooth
         #                valid_batchSize=125, saveto=SAVETO)
-        SRNN.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.0001,
+        full_train(model=SRNN, dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.0001,
                         valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':

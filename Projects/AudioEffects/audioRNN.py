@@ -6,6 +6,7 @@ Descriptions: the code to train and run the RNN
               ----2017.11.03
 #########################################################################"""
 from dl4s import gaussRNN, configRNN
+from dl4s import full_train
 from Projects.AudioEffects.fetchData import fetchData
 from Projects.AudioEffects.rmseTool import rmseRNN
 import os
@@ -34,7 +35,7 @@ if __name__ == '__main__':
         # Add the save file name into the save path.
         configRNN.savePath = os.path.join(configRNN.savePath, 'RNN-I')
         RNN = gaussRNN(configRNN)
-        RNN.full_train(dataset=Dataset, maxEpoch=300, batchSize= 125, earlyStop=10, learning_rate=0.001,
+        full_train(model=RNN, dataset=Dataset, maxEpoch=300, batchSize= 125, earlyStop=10, learning_rate=0.001,
                        valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':

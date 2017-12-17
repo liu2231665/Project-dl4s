@@ -6,6 +6,7 @@ Descriptions: the code to train and run the STORN
               ----2017.11.03
 #########################################################################"""
 from dl4s import gaussSTORN
+from dl4s import full_train
 from dl4s import configSTORN as Config
 from Projects.AudioEffects.fetchData import fetchData
 from Projects.AudioEffects.rmseTool import rmseRNN
@@ -36,7 +37,7 @@ if __name__ == '__main__':
         if not os.path.exists(Config.savePath):
             os.makedirs(Config.savePath)
         STORN = gaussSTORN(Config)
-        STORN.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.001,
+        full_train(model=STORN, dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.001,
                        valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':

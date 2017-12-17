@@ -6,6 +6,7 @@ Descriptions: the code to train and run the VRNN
               ----2017.11.03
 #########################################################################"""
 from dl4s import gaussVRNN
+from dl4s import full_train
 from dl4s import configVRNN as Config
 from Projects.AudioEffects.fetchData import fetchData
 from Projects.AudioEffects.rmseTool import rmseRNN
@@ -38,7 +39,7 @@ if __name__ == '__main__':
         if not os.path.exists(Config.savePath):
             os.makedirs(Config.savePath)
         VRNN = gaussVRNN(Config)
-        VRNN.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.0001,
+        full_train(model=VRNN, dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.0001,
                        valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':

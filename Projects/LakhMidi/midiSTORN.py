@@ -7,6 +7,7 @@ Descriptions: the code to train and run the binSTORN from dl4s.seqVAE
 #########################################################################"""
 from Projects.LakhMidi.fetchData import fetchData
 from dl4s import binSTORN
+from dl4s import full_train
 from dl4s import configSTORN as Config
 from Projects.LakhMidi.accTool import accRNN
 import os
@@ -37,7 +38,7 @@ if __name__ == '__main__':
         # Build the model and prepare the data-set.
         Dataset = fetchData()
         STORN = binSTORN(Config)
-        STORN.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.03,
+        full_train(model=STORN, dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.03,
                           valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':

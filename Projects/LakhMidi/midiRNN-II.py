@@ -7,6 +7,7 @@ Descriptions: the code to train and run the binRNN from dl4s.autoregRNN
 #########################################################################"""
 from Projects.LakhMidi.fetchData import fetchData
 from dl4s import binRNN, configRNN
+from dl4s import full_train
 from Projects.LakhMidi.accTool import accRNN
 import os
 
@@ -33,7 +34,7 @@ if __name__ == '__main__':
         # Build the model and prepare the data-set.
         Dataset = fetchData()
         RNN = binRNN(configRNN)
-        RNN.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.1,
+        full_train(model=RNN, dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.1,
                           valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':

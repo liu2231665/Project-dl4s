@@ -7,6 +7,7 @@ Descriptions: the code to train and run the binVRNN from dl4s.seqVAE
 #########################################################################"""
 from Projects.LakhMidi.fetchData import fetchData
 from dl4s import binVRNN
+from dl4s import full_train
 from dl4s import configVRNN as Config
 from Projects.LakhMidi.accTool import accRNN
 import os
@@ -40,7 +41,7 @@ if __name__ == '__main__':
         # Build the model and prepare the data-set.
         Dataset = fetchData()
         VRNN = binVRNN(Config)
-        VRNN.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.03,
+        full_train(model=VRNN, dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.03,
                           valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':
