@@ -6,23 +6,23 @@ Descriptions: the code to train and run the binary ssRNNRBM from dl4s.TRBM
               ----2017.12.16
 #########################################################################"""
 from Projects.LakhMidi.fetchData import fetchData
-from dl4s import binRnnRBM, binSRNN
+from dl4s import binssRNNRBM, binSRNN
 from dl4s import configssRNNRBM as Config
 from dl4s import configSRNN
 from Projects.LakhMidi.accTool import accRBM
 import os
 
-Config.Opt = 'Adam'
+Config.Opt = 'SGD'
 Config.unitType = 'GRU'
 Config.aisLevel = 30
 Config.aisRun = 20
 Config.dimRec = [500]
 Config.dimMlp = [400, 400]
-Config.dimInput = 150
+Config.dimInput = 128
 Config.dimState = 250
 Config.init_scale = 0.01
 Config.Gibbs = 1
-Config.W_Norm = True
+Config.W_Norm = False
 Config.muTrain = True
 Config.alphaTrain = True
 Config.eventPath = './binssRNNRBM/'
@@ -36,7 +36,7 @@ if __name__ == '__main__':
     Dataset = fetchData()
     configSRNN.Opt = 'SGD'
     configSRNN.unitType = 'GRU'
-    configSRNN.mode = 'smooth'
+    configSRNN.mode = 'filter'
     configSRNN.dimRecD = [500]
     configSRNN.dimRecA = [500]
     configSRNN.dimEnc = [400]
@@ -45,9 +45,9 @@ if __name__ == '__main__':
     configSRNN.dimInput = 128
     configSRNN.dimState = 500
     configSRNN.init_scale = 0.01
-    configSRNN.eventPath = './binSRNN-s/'
-    configSRNN.savePath = './binSRNN-s/'
-    configSRNN.loadPath = os.path.join(configSRNN.savePath, 'SRNN-s')
+    configSRNN.eventPath = './binSRNN-f/'
+    configSRNN.savePath = './binSRNN-f/'
+    configSRNN.loadPath = os.path.join(configSRNN.savePath, 'SRNN-f')
     SRNN = binSRNN(configSRNN)
 
     if Flag == 'training':
@@ -60,14 +60,13 @@ if __name__ == '__main__':
         # Add the save file name into the save path.
         Config.savePath = os.path.join(Config.savePath, 'ssRNNRBM')
         # Build the model and prepare the data-set.
-        Dataset = fetchData()
-        RnnRbm = binRnnRBM(Config, VAE=SRNN)
-        RnnRbm.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.1,
+        RnnRbm = binssRNNRBM(Config)
+        RnnRbm.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=300, learning_rate=0.1,
                           valid_batchSize=25, saveto=SAVETO)
 
     if Flag == 'evaluation':
         Config.loadPath = os.path.join(Config.savePath, 'ssRNNRBM')
-        RnnRbm = binRnnRBM(Config, VAE=SRNN)
+        RnnRbm = binssRNNRBM(Config, VAE=SRNN)
         print('Evaluation: start computing the accuracy metric.')
         ACC, NLL = accRBM(RnnRbm, Dataset['test'], batchSize=25)
         print('The testing transcription accuracy is \x1b[1;91m%10.4f\x1b[0m.' % ACC)
