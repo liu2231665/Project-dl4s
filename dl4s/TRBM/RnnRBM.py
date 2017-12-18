@@ -376,10 +376,9 @@ class binRnnRBM(_RnnRBM, object):
     _NVIL_VAE: generate the graph to compute the NVIL upper bound of log Partition
                function by a well-trained VAE.
     input: VAE - the well-trained VAE(SRNN/VRNN).
-           runs - the number of sampling.
     output: the upper boundLogZ.
     #########################################################################"""
-    def _NVIL_VAE(self, VAE, runs=100):
+    def _NVIL_VAE(self, VAE):
         # get the marginal and conditional distribution of the VAE.
         probs = VAE._dec
         Px_Z = tf.distributions.Bernoulli(probs=probs, dtype=tf.float32)
@@ -388,11 +387,14 @@ class binRnnRBM(_RnnRBM, object):
         mu, std = VAE._prior
         Pz = tf.distributions.Normal(loc=mu, scale=std)
         # generate the samples.
-        X = Px_Z.sample(sample_shape=runs)
-        logPz_X = tf.reduce_sum(Pz_X.log_prob(VAE._Z), axis=[-1])  # shape = [batch, steps]
-        logPx_Z = tf.reduce_sum((1 - X) * tf.log(tf.minimum(1.0, 1.01 - probs)) + X * tf.log(tf.minimum(1.0, probs + 0.01)), axis=[-1])  # shape = [runs, batch, steps]
-        logPz = tf.reduce_sum(Pz.log_prob(VAE._Z), axis=[-1])
-        return X, logPz_X, logPx_Z, logPz, VAE.x
+        X = Px_Z.sample()
+        pz_X = tf.reduce_prod(Pz_X.prob(VAE._Z), axis=[-1])  # shape = [batch, steps]
+        #logPx_Z = probs
+        logPx_Z = tf.reduce_sum(
+            (1 - X) * tf.log(tf.maximum(tf.minimum(1.0, 1 - probs), 1e-32)) + X * tf.log(tf.maximum(tf.minimum(1.0, probs), 1e-32)),
+            axis=[-1])  # shape = [runs, batch, steps]
+        pz = tf.reduce_prod(Pz.prob(VAE._Z), axis=[-1])
+        return X, pz_X, logPx_Z, pz, VAE.x
 
     """#########################################################################
     ais_function: compute the approximated negative log-likelihood with partition
@@ -405,15 +407,30 @@ class binRnnRBM(_RnnRBM, object):
             if self.VAE is None:
                 loss_value = self._sess.run(self._nll, feed_dict={self.x: input})
             else:
-                X, logPz_X, logPx_Z, logPz = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
-                # shape = [runs, batch, steps]
+                loss_value = []
+                X = []
+                pz_X = []
+                logPx_Z = []
+                pz = []
+                for i in range(self._aisRun):
+                    Xi, pz_Xi, logPx_Zi, pzi = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
+                    X.append(Xi)
+                    pz_X.append(pz_Xi)
+                    logPx_Z.append(logPx_Zi)
+                    pz.append(pzi)
+                    # shape = [runs, batch, steps]
+                X = np.asarray(X)
+                pz_X = np.asarray(pz_X) +1e-8
+                logPx_Z = np.asarray(logPx_Z)
+                pz = np.asarray(pz) + 1e-8
                 FEofSample = self._sess.run(self.FEofSample, feed_dict={self.xx: X, self.x: input})
-                logTerm = 2 * (-FEofSample + logPz_X - logPx_Z - logPz)
+                logTerm = 2 * (-FEofSample - logPx_Z)
                 logTerm_max = np.max(logTerm, axis=0)
-                r_ais = np.mean(np.exp(logTerm - logTerm_max), axis=0)
-                logZ = 0.5 * (np.log(r_ais) + logTerm_max)
+                r_ais = np.mean((pz_X / pz)**2 * np.exp(logTerm - logTerm_max), axis=0)
+                logZ = 0.5 * (np.log(r_ais+1e-38) + logTerm_max)
                 FEofInput = self._sess.run(self.FEofInput, feed_dict={self.x: input})
-                loss_value = np.mean(FEofInput + logZ)
+                loss_value.append(np.mean(FEofInput + logZ))
+                loss_value = np.asarray(loss_value).mean()
         return loss_value
 
 
@@ -777,10 +794,9 @@ class binssRNNRBM(_RnnRBM, object):
     _NVIL_VAE: generate the graph to compute the NVIL upper bound of log Partition
                function by a well-trained VAE.
     input: VAE - the well-trained VAE(SRNN/VRNN).
-           runs - the number of sampling.
     output: the upper boundLogZ.
     #########################################################################"""
-    def _NVIL_VAE(self, VAE, runs=1):
+    def _NVIL_VAE(self, VAE):
         # get the marginal and conditional distribution of the VAE.
         probs = VAE._dec
         Px_Z = tf.distributions.Bernoulli(probs=probs, dtype=tf.float32)
@@ -790,13 +806,13 @@ class binssRNNRBM(_RnnRBM, object):
         Pz = tf.distributions.Normal(loc=mu, scale=std)
         # generate the samples.
         X = Px_Z.sample()
-        logPz_X = tf.reduce_prod(Pz_X.prob(VAE._Z), axis=[-1])  # shape = [batch, steps]
+        pz_X = tf.reduce_prod(Pz_X.prob(VAE._Z), axis=[-1])  # shape = [batch, steps]
         #logPx_Z = probs
         logPx_Z = tf.reduce_sum(
             (1 - X) * tf.log(tf.maximum(tf.minimum(1.0, 1 - probs), 1e-32)) + X * tf.log(tf.maximum(tf.minimum(1.0, probs), 1e-32)),
             axis=[-1])  # shape = [runs, batch, steps]
-        logPz = tf.reduce_prod(Pz.prob(VAE._Z), axis=[-1])
-        return X, logPz_X, logPx_Z, logPz, VAE.x
+        pz = tf.reduce_prod(Pz.prob(VAE._Z), axis=[-1])
+        return X, pz_X, logPx_Z, pz, VAE.x
 
     """#########################################################################
     ais_function: compute the approximated negative log-likelihood with partition
@@ -811,24 +827,24 @@ class binssRNNRBM(_RnnRBM, object):
             else:
                 loss_value = []
                 X = []
-                logPz_X = []
+                pz_X = []
                 logPx_Z = []
-                logPz = []
+                pz = []
                 for i in range(self._aisRun):
-                    Xi, logPz_Xi, logPx_Zi, logPzi = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
+                    Xi, pz_Xi, logPx_Zi, pzi = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
                     X.append(Xi)
-                    logPz_X.append(logPz_Xi)
+                    pz_X.append(pz_Xi)
                     logPx_Z.append(logPx_Zi)
-                    logPz.append(logPzi)
+                    pz.append(pzi)
                     # shape = [runs, batch, steps]
                 X = np.asarray(X)
-                logPz_X = np.asarray(logPz_X) +1e-8
-                logPx_Z = np.asarray(logPz_X)
-                logPz = np.asarray(logPz) + 1e-8
+                pz_X = np.asarray(pz_X) +1e-8
+                logPx_Z = np.asarray(logPx_Z)
+                pz = np.asarray(pz) + 1e-8
                 FEofSample = self._sess.run(self.FEofSample, feed_dict={self.xx: X, self.x: input})
                 logTerm = 2 * (-FEofSample - logPx_Z)
                 logTerm_max = np.max(logTerm, axis=0)
-                r_ais = np.mean((logPz_X / logPz)**2 * np.exp(logTerm - logTerm_max), axis=0)
+                r_ais = np.mean((pz_X / pz)**2 * np.exp(logTerm - logTerm_max), axis=0)
                 logZ = 0.5 * (np.log(r_ais+1e-38) + logTerm_max)
                 FEofInput = self._sess.run(self.FEofInput, feed_dict={self.x: input})
                 loss_value.append(np.mean(FEofInput + logZ))
