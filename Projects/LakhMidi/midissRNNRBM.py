@@ -15,7 +15,7 @@ import os
 Config.Opt = 'SGD'
 Config.unitType = 'GRU'
 Config.aisLevel = 30
-Config.aisRun = 20
+Config.aisRun = 1000
 Config.dimRec = [500]
 Config.dimMlp = [400, 400]
 Config.dimInput = 128
@@ -29,14 +29,14 @@ Config.eventPath = './binssRNNRBM/'
 Config.savePath = './binssRNNRBM/'
 SAVETO = './binssRNNRBM/historyMidiRNNRBM.npz'
 
-Flag = 'training'                       # {'training'/'evaluation'}
+Flag = 'evaluation'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
     # REFERENCE MODEL.
     Dataset = fetchData()
     configSRNN.Opt = 'SGD'
     configSRNN.unitType = 'GRU'
-    configSRNN.mode = 'filter'
+    configSRNN.mode = 'smooth'
     configSRNN.dimRecD = [500]
     configSRNN.dimRecA = [500]
     configSRNN.dimEnc = [400]
@@ -45,9 +45,9 @@ if __name__ == '__main__':
     configSRNN.dimInput = 128
     configSRNN.dimState = 500
     configSRNN.init_scale = 0.01
-    configSRNN.eventPath = './binSRNN-f/'
-    configSRNN.savePath = './binSRNN-f/'
-    configSRNN.loadPath = os.path.join(configSRNN.savePath, 'SRNN-f')
+    configSRNN.eventPath = './binSRNN-s/'
+    configSRNN.savePath = './binSRNN-s/'
+    configSRNN.loadPath = os.path.join(configSRNN.savePath, 'SRNN-s')
     SRNN = binSRNN(configSRNN)
 
     if Flag == 'training':
@@ -68,6 +68,6 @@ if __name__ == '__main__':
         Config.loadPath = os.path.join(Config.savePath, 'ssRNNRBM')
         RnnRbm = binssRNNRBM(Config, VAE=SRNN)
         print('Evaluation: start computing the accuracy metric.')
-        ACC, NLL = accRBM(RnnRbm, Dataset['test'], batchSize=25)
+        ACC, NLL = accRBM(RnnRbm, Dataset['test'], batchSize=5)
         print('The testing transcription accuracy is \x1b[1;91m%10.4f\x1b[0m.' % ACC)
         print('The testing transcription NLL is \x1b[1;91m%10.4f\x1b[0m.' % NLL)

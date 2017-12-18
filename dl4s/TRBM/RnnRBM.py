@@ -791,8 +791,9 @@ class binssRNNRBM(_RnnRBM, object):
         # generate the samples.
         X = Px_Z.sample(sample_shape=runs)
         logPz_X = tf.reduce_sum(Pz_X.log_prob(VAE._Z), axis=[-1])  # shape = [batch, steps]
+        #logPx_Z = probs
         logPx_Z = tf.reduce_sum(
-            (1 - X) * tf.log(tf.minimum(1.0, 1.01 - probs)) + X * tf.log(tf.minimum(1.0, probs + 0.01)),
+            (1 - X) * tf.log(tf.maximum(tf.minimum(1.0, 1 - probs), 1e-32)) + X * tf.log(tf.maximum(tf.minimum(1.0, probs), 1e-32)),
             axis=[-1])  # shape = [runs, batch, steps]
         logPz = tf.reduce_sum(Pz.log_prob(VAE._Z), axis=[-1])
         return X, logPz_X, logPx_Z, logPz, VAE.x
