@@ -66,7 +66,7 @@ if __name__ == '__main__':
 
     if Flag == 'evaluation':
         Config.loadPath = os.path.join(Config.savePath, 'ssRNNRBM')
-        RnnRbm = binssRNNRBM(Config)
+        RnnRbm = binssRNNRBM(Config, VAE=SRNN)
         print('Evaluation: start computing the accuracy metric.')
         ACC, NLL = accRBM(RnnRbm, Dataset['test'], batchSize=25)
         print('The testing transcription accuracy is \x1b[1;91m%10.4f\x1b[0m.' % ACC)

@@ -810,17 +810,29 @@ class binssRNNRBM(_RnnRBM, object):
                 loss_value = self._sess.run(self._nll, feed_dict={self.x: input})
             else:
                 loss_value = []
+                X = []
+                logPz_X = []
+                logPx_Z = []
+                logPz = []
                 for i in range(self._aisRun):
-                    X, logPz_X, logPx_Z, logPz = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
+                    Xi, logPz_Xi, logPx_Zi, logPzi = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
+                    X.append(Xi)
+                    logPz_X.append(logPz_Xi)
+                    logPx_Z.append(logPx_Zi)
+                    logPz.append(logPzi)
                     # shape = [runs, batch, steps]
-                    FEofSample = self._sess.run(self.FEofSample, feed_dict={self.xx: X, self.x: input})
-                    logTerm = 2 * (-FEofSample + logPz_X - logPx_Z - logPz)
-                    logTerm_max = np.max(logTerm, axis=0)
-                    r_ais = np.mean(np.exp(logTerm - logTerm_max), axis=0)
-                    logZ = 0.5 * (np.log(r_ais) + logTerm_max)
-                    FEofInput = self._sess.run(self.FEofInput, feed_dict={self.x: input})
-                    loss_value.append(np.mean(FEofInput + logZ))
-                loss_value = np.asarray(loss_value).mean()
+                X = np.asarray(X)
+                logPz_X = np.asarray(logPz_X)
+                logPx_Z = np.asarray(logPz_X)
+                logPz = np.asarray(logPz)
+                FEofSample = self._sess.run(self.FEofSample, feed_dict={self.xx: X, self.x: input})
+                logTerm = 2 * (-FEofSample + logPz_X - logPx_Z - logPz)
+                logTerm_max = np.max(logTerm, axis=0)
+                r_ais = np.mean(np.exp(logTerm - logTerm_max), axis=0)
+                logZ = 0.5 * (np.log(r_ais+1e-38) + logTerm_max)
+                FEofInput = self._sess.run(self.FEofInput, feed_dict={self.x: input})
+                loss_value.append(np.mean(FEofInput + logZ))
+            loss_value = np.asarray(loss_value).mean()
         return loss_value
 
     """#########################################################################
