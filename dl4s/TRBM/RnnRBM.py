@@ -739,7 +739,7 @@ class binssRNNRBM(_RnnRBM, object):
                 self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
                 self.VAE = VAE
             else:
-                self._logZ = self._NVIL_VAE(VAE, self._aisRun)  # X, logPz_X, logPx_Z, logPz, VAE.x
+                self._logZ = self._NVIL_VAE(VAE)  # X, logPz_X, logPx_Z, logPz, VAE.x
                 self.xx = tf.placeholder(dtype='float32', shape=[None, None, None, config.dimInput])
                 self.FEofSample = self._rbm.FreeEnergy(self.xx)
                 self.FEofInput = self._rbm.FreeEnergy(self.x)
@@ -780,7 +780,7 @@ class binssRNNRBM(_RnnRBM, object):
            runs - the number of sampling.
     output: the upper boundLogZ.
     #########################################################################"""
-    def _NVIL_VAE(self, VAE, runs=100):
+    def _NVIL_VAE(self, VAE, runs=1):
         # get the marginal and conditional distribution of the VAE.
         probs = VAE._dec
         Px_Z = tf.distributions.Bernoulli(probs=probs, dtype=tf.float32)
@@ -809,15 +809,18 @@ class binssRNNRBM(_RnnRBM, object):
             if self.VAE is None:
                 loss_value = self._sess.run(self._nll, feed_dict={self.x: input})
             else:
-                X, logPz_X, logPx_Z, logPz = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
-                # shape = [runs, batch, steps]
-                FEofSample = self._sess.run(self.FEofSample, feed_dict={self.xx: X, self.x: input})
-                logTerm = 2 * (-FEofSample + logPz_X - logPx_Z - logPz)
-                logTerm_max = np.max(logTerm, axis=0)
-                r_ais = np.mean(np.exp(logTerm - logTerm_max), axis=0)
-                logZ = 0.5 * (np.log(r_ais) + logTerm_max)
-                FEofInput = self._sess.run(self.FEofInput, feed_dict={self.x: input})
-                loss_value = np.mean(FEofInput + logZ)
+                loss_value = []
+                for i in range(self._aisRun):
+                    X, logPz_X, logPx_Z, logPz = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
+                    # shape = [runs, batch, steps]
+                    FEofSample = self._sess.run(self.FEofSample, feed_dict={self.xx: X, self.x: input})
+                    logTerm = 2 * (-FEofSample + logPz_X - logPx_Z - logPz)
+                    logTerm_max = np.max(logTerm, axis=0)
+                    r_ais = np.mean(np.exp(logTerm - logTerm_max), axis=0)
+                    logZ = 0.5 * (np.log(r_ais) + logTerm_max)
+                    FEofInput = self._sess.run(self.FEofInput, feed_dict={self.x: input})
+                    loss_value.append(np.mean(FEofInput + logZ))
+                loss_value = np.asarray(loss_value).mean()
         return loss_value
 
     """#########################################################################

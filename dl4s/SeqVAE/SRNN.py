@@ -1,4 +1,3 @@
-# TODO:
 """#########################################################################
 Author: Yingru Liu
 Institute: Stony Brook University

@@ -1,4 +1,3 @@
-# TODO: finish ss-rbm.
 """#########################################################################
 Author: Yingru Liu
 Institute: Stony Brook University
@@ -586,10 +585,7 @@ class mu_ssRBM(object):
                   + self._mu  # shape = [..., dimH]
         meanS_vh1 = factorV
         eps = tf.truncated_normal(shape=(tf.shape(meanS_vh1)))
-        if beta == 0.0:
-            newS = meanS_vh1 * H
-        else:
-            newS = meanS_vh1 * H + tf.sqrt(self._alpha) * eps
+        newS = meanS_vh1 * H + tf.sqrt(self._alpha) * eps
         return newS, meanS_vh1
 
     """#########################################################################
@@ -602,10 +598,7 @@ class mu_ssRBM(object):
     #########################################################################"""
     def sampleVgivenSH(self, S, H, beta=1.0):
         # shape = [..., dimV]
-        if beta == 0.0:
-            Cv_sh = 1 / (self._gamma + 1e-8)
-        else:
-            Cv_sh = 1 / (self._gamma + tf.tensordot(H, self._phi, [[-1], [0]]) + 1e-8)
+        Cv_sh = 1 / (self._gamma + beta * tf.tensordot(H, self._phi, [[-1], [0]]) + 1e-8)
         # shape = [..., dimV]
         meanV_sh = Cv_sh * (tf.tensordot(S*H, beta * tf.transpose(self._W), [[-1], [0]])
                             + self._bv)
@@ -649,13 +642,9 @@ class mu_ssRBM(object):
         #
         factorV = tf.tensordot(V, beta * self._W, [[-1], [0]])  # shape = [..., dimH]
         sqr_term_h = (0.5 * factorV ** 2) / (self._alpha + 1e-8) \
-                   - 0.5 * tf.tensordot(V ** 2, tf.transpose(self._phi), [[-1], [0]])
+                   - 0.5 * tf.tensordot(V ** 2, beta * tf.transpose(self._phi), [[-1], [0]])
         lin_term_h = factorV * self._mu
-        if beta == 0.0:
-            splus_term = tf.reduce_sum(tf.nn.softplus(self._bh),
-                                      axis=[-1])
-        else:
-            splus_term = tf.reduce_sum(tf.nn.softplus(sqr_term_h + lin_term_h + self._bh),
+        splus_term = tf.reduce_sum(tf.nn.softplus(sqr_term_h + lin_term_h + self._bh),
                                        axis=[-1])
         return sqr_term - splus_term - lin_term - con_term
 
