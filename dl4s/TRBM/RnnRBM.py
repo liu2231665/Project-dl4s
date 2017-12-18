@@ -362,7 +362,7 @@ class binRnnRBM(_RnnRBM, object):
                 self._nll = tf.reduce_mean(self._rbm.FreeEnergy(self.x) + self._logZ)
                 self.VAE = VAE
             else:
-                self._logZ = self._NVIL_VAE(VAE, self._aisRun)  # X, logPz_X, logPx_Z, logPz, VAE.x
+                self._logZ = self._NVIL_VAE(VAE)  # X, logPz_X, logPx_Z, logPz, VAE.x
                 self.xx = tf.placeholder(dtype='float32', shape=[None, None, None, config.dimInput])
                 self.FEofSample = self._rbm.FreeEnergy(self.xx)
                 self.FEofInput = self._rbm.FreeEnergy(self.x)
@@ -389,12 +389,12 @@ class binRnnRBM(_RnnRBM, object):
         # generate the samples.
         X = Px_Z.sample()
         pz_X = tf.reduce_prod(Pz_X.prob(VAE._Z), axis=[-1])  # shape = [batch, steps]
-        #logPx_Z = probs
-        logPx_Z = tf.reduce_sum(
-            (1 - X) * tf.log(tf.maximum(tf.minimum(1.0, 1 - probs), 1e-32)) + X * tf.log(tf.maximum(tf.minimum(1.0, probs), 1e-32)),
-            axis=[-1])  # shape = [runs, batch, steps]
+        px_Z = tf.reduce_prod(Px_Z.prob(X), axis=[-1])
+        #logPx_Z = tf.reduce_sum(
+        #    (1 - X) * tf.log(tf.maximum(tf.minimum(1.0, 1 - probs), 1e-32)) + X * tf.log(tf.maximum(tf.minimum(1.0, probs), 1e-32)),
+        #    axis=[-1])  # shape = [runs, batch, steps]
         pz = tf.reduce_prod(Pz.prob(VAE._Z), axis=[-1])
-        return X, pz_X, logPx_Z, pz, VAE.x
+        return X, pz_X, px_Z, pz, VAE.x
 
     """#########################################################################
     ais_function: compute the approximated negative log-likelihood with partition
@@ -410,23 +410,23 @@ class binRnnRBM(_RnnRBM, object):
                 loss_value = []
                 X = []
                 pz_X = []
-                logPx_Z = []
+                px_Z = []
                 pz = []
                 for i in range(self._aisRun):
-                    Xi, pz_Xi, logPx_Zi, pzi = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
+                    Xi, pz_Xi, px_Zi, pzi = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
                     X.append(Xi)
                     pz_X.append(pz_Xi)
-                    logPx_Z.append(logPx_Zi)
+                    px_Z.append(np.nan_to_num(px_Zi))
                     pz.append(pzi)
                     # shape = [runs, batch, steps]
                 X = np.asarray(X)
                 pz_X = np.asarray(pz_X) +1e-8
-                logPx_Z = np.asarray(logPx_Z)
+                px_Z = np.asarray(px_Z) +1e-8
                 pz = np.asarray(pz) + 1e-8
                 FEofSample = self._sess.run(self.FEofSample, feed_dict={self.xx: X, self.x: input})
-                logTerm = 2 * (-FEofSample - logPx_Z)
+                logTerm = 2 * (-FEofSample)
                 logTerm_max = np.max(logTerm, axis=0)
-                r_ais = np.mean((pz_X / pz)**2 * np.exp(logTerm - logTerm_max), axis=0)
+                r_ais = np.mean((pz_X / (pz * px_Z + 1e-8))**2 * np.exp(logTerm - logTerm_max), axis=0)
                 logZ = 0.5 * (np.log(r_ais+1e-38) + logTerm_max)
                 FEofInput = self._sess.run(self.FEofInput, feed_dict={self.x: input})
                 loss_value.append(np.mean(FEofInput + logZ))
@@ -807,12 +807,12 @@ class binssRNNRBM(_RnnRBM, object):
         # generate the samples.
         X = Px_Z.sample()
         pz_X = tf.reduce_prod(Pz_X.prob(VAE._Z), axis=[-1])  # shape = [batch, steps]
-        logPx_Z = tf.reduce_prod(Px_Z.prob(X), axis=[-1])
+        px_Z = tf.reduce_prod(Px_Z.prob(X), axis=[-1])
         #logPx_Z = tf.reduce_sum(
         #    (1 - X) * tf.log(tf.maximum(tf.minimum(1.0, 1 - probs), 1e-32)) + X * tf.log(tf.maximum(tf.minimum(1.0, probs), 1e-32)),
         #    axis=[-1])  # shape = [runs, batch, steps]
         pz = tf.reduce_prod(Pz.prob(VAE._Z), axis=[-1])
-        return X, pz_X, logPx_Z, pz, VAE.x
+        return X, pz_X, px_Z, pz, VAE.x
 
     """#########################################################################
     ais_function: compute the approximated negative log-likelihood with partition
@@ -828,23 +828,23 @@ class binssRNNRBM(_RnnRBM, object):
                 loss_value = []
                 X = []
                 pz_X = []
-                logPx_Z = []
+                px_Z = []
                 pz = []
                 for i in range(self._aisRun):
-                    Xi, pz_Xi, logPx_Zi, pzi = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
+                    Xi, pz_Xi, px_Zi, pzi = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
                     X.append(Xi)
                     pz_X.append(pz_Xi)
-                    logPx_Z.append(np.nan_to_num(logPx_Zi))
+                    px_Z.append(np.nan_to_num(px_Zi))
                     pz.append(pzi)
                     # shape = [runs, batch, steps]
                 X = np.asarray(X)
                 pz_X = np.asarray(pz_X) +1e-8
-                logPx_Z = np.asarray(logPx_Z) +1e-8
+                px_Z = np.asarray(px_Z) +1e-8
                 pz = np.asarray(pz) + 1e-8
                 FEofSample = self._sess.run(self.FEofSample, feed_dict={self.xx: X, self.x: input})
-                logTerm = 2 * (-FEofSample - logPx_Z)
+                logTerm = 2 * (-FEofSample)
                 logTerm_max = np.max(logTerm, axis=0)
-                r_ais = np.mean((pz_X / (pz * logPx_Z + 1e-8))**2 * np.exp(logTerm - logTerm_max), axis=0)
+                r_ais = np.mean((pz_X / (pz * px_Z + 1e-8))**2 * np.exp(logTerm - logTerm_max), axis=0)
                 logZ = 0.5 * (np.log(r_ais+1e-38) + logTerm_max)
                 FEofInput = self._sess.run(self.FEofInput, feed_dict={self.x: input})
                 loss_value.append(np.mean(FEofInput + logZ))
