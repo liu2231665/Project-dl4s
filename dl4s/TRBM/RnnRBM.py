@@ -806,12 +806,12 @@ class binssRNNRBM(_RnnRBM, object):
         Pz = tf.distributions.Normal(loc=mu, scale=std)
         # generate the samples.
         X = Px_Z.sample()
-        pz_X = tf.reduce_prod(Pz_X.prob(VAE._Z), axis=[-1])  # shape = [batch, steps]
-        px_Z = tf.reduce_prod(Px_Z.prob(X), axis=[-1])
+        pz_X = Pz_X.prob(VAE._Z)  # shape = [batch, steps]
+        px_Z = Px_Z.prob(X)
         #logPx_Z = tf.reduce_sum(
         #    (1 - X) * tf.log(tf.maximum(tf.minimum(1.0, 1 - probs), 1e-32)) + X * tf.log(tf.maximum(tf.minimum(1.0, probs), 1e-32)),
         #    axis=[-1])  # shape = [runs, batch, steps]
-        pz = tf.reduce_prod(Pz.prob(VAE._Z), axis=[-1])
+        pz = Pz.prob(VAE._Z)
         return X, pz_X, px_Z, pz, VAE.x
 
     """#########################################################################
@@ -838,13 +838,14 @@ class binssRNNRBM(_RnnRBM, object):
                     pz.append(pzi)
                     # shape = [runs, batch, steps]
                 X = np.asarray(X)
-                pz_X = np.asarray(pz_X) +1e-8
-                px_Z = np.asarray(px_Z) +1e-8
-                pz = np.asarray(pz) + 1e-8
+                pz_X = np.asarray(pz_X)
+                px_Z = np.asarray(px_Z)
+                pz = np.asarray(pz)
                 FEofSample = self._sess.run(self.FEofSample, feed_dict={self.xx: X, self.x: input})
                 logTerm = 2 * (-FEofSample)
                 logTerm_max = np.max(logTerm, axis=0)
-                r_ais = np.mean((pz_X / (pz * px_Z + 1e-8))**2 * np.exp(logTerm - logTerm_max), axis=0)
+                coefficient = tf.reduce_prod((pz_X / (pz * px_Z + 1e-8))**2, axis=[-1])
+                r_ais = np.mean(coefficient * np.exp(logTerm - logTerm_max), axis=0)
                 logZ = 0.5 * (np.log(r_ais+1e-38) + logTerm_max)
                 FEofInput = self._sess.run(self.FEofInput, feed_dict={self.x: input})
                 loss_value.append(np.mean(FEofInput + logZ))
