@@ -734,6 +734,20 @@ class mu_ssRBM(object):
         #mask = tf.minimum(1.0, Wnorm)
         return tf.assign(self._W, self._W / Wnorm)
 
+    """
+    __call__:
+    input: xt - the current input with size (batch, frame).
+           state - the previous state of the cells. [newH, hidden, rnnstate]
+           scope - indicate the variable scope.
+    output: 
+    """
+    def __call__(self, xt, bht, bvt, gammat, k):
+        self._bh = bht
+        self._bv = bvt
+        self._gamma = gammat
+        newV, newH, newS, muV, muH, muS = self.GibbsSampling(xt, k=k)
+        return newV, newH, newS, muV, muH, muS
+
 
 """#########################################################################
 Class: bin_ssRBM - the mu-pooled spike and slab Restricted Boltzmann Machine 
@@ -760,6 +774,7 @@ class bin_ssRBM(object):
            muTrain - indicate whether train mu or set as hyper parameter.
            scope - using to define the variable_scope.
            k - Gibbs sampling steps.
+           CGRNN - the flag indicates whether it's used in CGRNN.
     output: None.
     #########################################################################"""
     def __init__(
@@ -777,7 +792,8 @@ class bin_ssRBM(object):
             mu=None,
             muTrain=False,
             scope=None,
-            k=1
+            k=1,
+            CGRNN=False
     ):
         self._sess = tf.Session()
         # the proposal distribution.
@@ -828,7 +844,10 @@ class bin_ssRBM(object):
                     self._mu = tf.get_variable('mu', shape=self._dimS, initializer=tf.zeros_initializer)
                 else:
                     self._mu = tf.zeros(shape=self._dimS, name='mu')
-            #
+            # if it's used in CGRNN, don't create this part of graph.
+            if CGRNN:
+                return
+
             # x = [batch, steps, dimV]. O.w, we define it as non-temporal data with shape [batch,dimV].
             self._V = x if x is not None else tf.placeholder(dtype=tf.float32, shape=[None, dimV], name='V')
             # <tensor placeholder> learning rate.
@@ -917,7 +936,7 @@ class bin_ssRBM(object):
     #########################################################################"""
     def FreeEnergy(self, V, beta=1.0):
         #
-        lin_term = tf.tensordot(V, self._bv, [[-1], [0]])
+        lin_term = tf.tensordot(V, self._bv, [[-1], [-1]])
         con_term = 0.5 * tf.reduce_sum(tf.log(2 * np.pi) - tf.log(self._alpha + 1e-8))
         #
         factorV = tf.tensordot(V, beta * self._W, [[-1], [0]])  # shape = [..., dimH]
@@ -1003,3 +1022,16 @@ class bin_ssRBM(object):
         Wnorm = tf.stop_gradient(tf.norm(self._W, axis=0))
         # mask = tf.minimum(1.0, Wnorm)
         return tf.assign(self._W, self._W / Wnorm)
+
+    """
+    __call__:
+    input: xt - the current input with size (batch, frame).
+           state - the previous state of the cells. [newH, hidden, rnnstate]
+           scope - indicate the variable scope.
+    output: 
+    """
+    def __call__(self, xt, bht, bvt, k):
+        self._bh = bht
+        self._bv = bvt
+        newV, newH, newS, muV, muH, muS = self.GibbsSampling(xt, k=k)
+        return newV, newH, newS, muV, muH, muS

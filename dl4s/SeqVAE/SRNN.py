@@ -12,7 +12,6 @@ from dl4s.tools import get_batches_idx
 import numpy as np
 import time
 
-
 """#########################################################################
 Class: _SRNN - the hyper abstraction of the SRNN.
 #########################################################################"""

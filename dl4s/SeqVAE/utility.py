@@ -548,8 +548,8 @@ class stoCell(tf.contrib.rnn.RNNCell):
             # compute the mean and std of P(Z) based on [Z{t-1}, d_{t-1}]
             d_tm1 = x[:, 0:self._dimDt]
             prior_mu = tf.tensordot(tf.concat(axis=1, values=(state, d_tm1)), self._Wp_mu, [[-1], [0]]) + self._bp_mu
-            prior_sig = tf.nn.softplus(tf.tensordot(tf.concat(axis=1, values=(state, d_tm1))
-                                                 , self._Wp_sig, [[-1], [0]]) + self._bp_sig) + 1e-8
+            prior_sig = tf.nn.softplus(tf.tensordot(tf.concat(axis=1, values=(state, d_tm1)),
+                                                    self._Wp_sig, [[-1], [0]]) + self._bp_sig) + 1e-8
         with tf.variable_scope('encoder'):
             # build post mean and std of the inference network by NN(Z{t-1}, at)
             a_t = x[:, self._dimDt:]
