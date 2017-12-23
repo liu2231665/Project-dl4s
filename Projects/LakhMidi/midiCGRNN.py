@@ -6,9 +6,9 @@ Descriptions: the code to train and run the binary CGRNN from dl4s.CGRNN
               ----2017.12.21
 #########################################################################"""
 from Projects.LakhMidi.fetchData import fetchData
-from dl4s import binCGRNN, binRNN
+from dl4s import binCGRNN, binSRNN
 from dl4s import configCGRNN as Config
-from dl4s import configRNN
+from dl4s import configSRNN
 from dl4s.tools import full_train
 from Projects.LakhMidi.accTool import accRBM
 import os
@@ -51,18 +51,24 @@ if __name__ == '__main__':
 
     if Flag == 'evaluation':
         # REFERENCE MODEL.
-        configRNN.unitType = "GRU"
-        # configRNN.Opt = 'Momentum'
-        configRNN.savePath = "./binRNN/"
-        configRNN.eventPath = "./binRNN/"
-        configRNN.dimLayer = [128, 500, 128]
-        configRNN.init_scale = 0.01
-        SAVETO = './binRNN/historyMidiRNN.npz'
-        configRNN.loadPath = os.path.join(configRNN.savePath, 'RNN-I')
-        binRnn = binRNN(configRNN)
+        configSRNN.Opt = 'SGD'
+        configSRNN.unitType = 'GRU'
+        configSRNN.mode = 'smooth'
+        configSRNN.dimRecD = [500]
+        configSRNN.dimRecA = [500]
+        configSRNN.dimEnc = [400]
+        configSRNN.dimDec = [400]
+        configSRNN.dimMLPx = [400]
+        configSRNN.dimInput = 128
+        configSRNN.dimState = 500
+        configSRNN.init_scale = 0.01
+        configSRNN.eventPath = './binSRNN-s/'
+        configSRNN.savePath = './binSRNN-s/'
+        configSRNN.loadPath = os.path.join(configSRNN.savePath, 'SRNN-s')
+        SRNN = binSRNN(configSRNN)
         #
         Config.loadPath = os.path.join(Config.savePath, 'CGRNN-f')
-        RnnRbm = binCGRNN(Config, binRNN=binRnn)
+        RnnRbm = binCGRNN(Config, VAE=SRNN)
         print('Evaluation: start computing the accuracy metric.')
         ACC, NLL = accRBM(RnnRbm, Dataset['test'], batchSize=5)
         print('The testing transcription accuracy is \x1b[1;91m%10.4f\x1b[0m.' % ACC)
