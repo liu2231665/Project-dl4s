@@ -219,7 +219,7 @@ def full_train(model, dataset, maxEpoch, batchSize, earlyStop,
     print('The average epoch duration is \x1b[1;91m%10.4f\x1b[0m seconds.' % durationEpoch)
 
     # evaluate the best model w.r.t the test set and record the average loss.
-    loadModel(model)
+    loadModel(model, model._savePath)
 
     trainLoss = []
     trainBatch = get_batches_idx(len(trainData), batchSize, True)

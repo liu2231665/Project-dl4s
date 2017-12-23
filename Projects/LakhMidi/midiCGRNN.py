@@ -17,7 +17,7 @@ Config.mode = 'full'
 Config.Opt = 'SGD'
 Config.unitType = 'GRU'
 Config.aisLevel = 100
-Config.aisRun = 100
+Config.aisRun = 50
 Config.dimRec = [500]
 Config.dimMlp = [400, 400]
 Config.dimInput = 128
@@ -70,6 +70,6 @@ if __name__ == '__main__':
         Config.loadPath = os.path.join(Config.savePath, 'CGRNN-f')
         RnnRbm = binCGRNN(Config, VAE=SRNN)
         print('Evaluation: start computing the accuracy metric.')
-        ACC, NLL = accRBM(RnnRbm, Dataset['test'], batchSize=25)
+        ACC, NLL = accRBM(RnnRbm, Dataset['test'], batchSize=5)
         print('The testing transcription accuracy is \x1b[1;91m%10.4f\x1b[0m.' % ACC)
         print('The testing transcription NLL is \x1b[1;91m%10.4f\x1b[0m.' % NLL)

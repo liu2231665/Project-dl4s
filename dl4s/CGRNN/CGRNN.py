@@ -113,21 +113,24 @@ class _CGRNN(object):
     _NVIL_VAE: generate the graph to compute the NVIL upper bound of log Partition
                function by a well-trained VAE.
     input: VAE - the well-trained VAE(SRNN/VRNN).
-           runs - the number of sampling.
     output: the upper boundLogZ.
     #########################################################################"""
-    def _NVIL_VAE(self, VAE, runs=100):
+    def _NVIL_VAE(self, VAE):
         # get the marginal and conditional distribution of the VAE.
-        mu, std = VAE._dec
-        Px_Z = tf.distributions.Normal(loc=mu, scale=std)
+        probs = VAE._dec
+        Px_Z = tf.distributions.Bernoulli(probs=probs, dtype=tf.float32)
         mu, std = VAE._enc
         Pz_X = tf.distributions.Normal(loc=mu, scale=std)
         mu, std = VAE._prior
         Pz = tf.distributions.Normal(loc=mu, scale=std)
         # generate the samples.
-        X = Px_Z.sample(sample_shape=runs)
+        X = Px_Z.sample()
         logPz_X = tf.reduce_sum(Pz_X.log_prob(VAE._Z), axis=[-1])  # shape = [batch, steps]
-        logPx_Z = tf.reduce_sum(Px_Z.log_prob(X), axis=[-1])  # shape = [runs, batch, steps]
+        # logPx_Z = tf.reduce_prod(Px_Z.log_prob(X), axis=[-1])
+        logPx_Z = tf.reduce_sum(
+            (1 - X) * tf.log(tf.maximum(tf.minimum(1.0, 1 - probs), 1e-32))
+            + X * tf.log(tf.maximum(tf.minimum(1.0, probs), 1e-32)),
+            axis=[-1])  # shape = [runs, batch, steps]
         logPz = tf.reduce_sum(Pz.log_prob(VAE._Z), axis=[-1])
         return X, logPz_X, logPx_Z, logPz, VAE.x
 
@@ -169,7 +172,7 @@ class binCGRNN(_CGRNN, object):
                 self._nll = tf.reduce_mean(self.Cell.RBM.FreeEnergy(self.x) + self._logZ)
                 self.VAE = VAE
             else:
-                self._logZ = self._NVIL_VAE(VAE, self._aisRun)  # X, logPz_X, logPx_Z, logPz, VAE.x
+                self._logZ = self._NVIL_VAE(VAE)  # X, logPz_X, logPx_Z, logPz, VAE.x
                 self.xx = tf.placeholder(dtype='float32', shape=[None, None, None, config.dimInput])
                 self.FEofSample = self.Cell.RBM.FreeEnergy(self.xx)
                 self.FEofInput = self.Cell.RBM.FreeEnergy(self.x)
