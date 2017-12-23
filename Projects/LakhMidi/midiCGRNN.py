@@ -34,24 +34,7 @@ SAVETO = './binCGRNN-f/historyCGRNN-f.npz'
 Flag = 'training'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
-    # REFERENCE MODEL.
     Dataset = fetchData()
-    configSRNN.Opt = 'SGD'
-    configSRNN.unitType = 'GRU'
-    configSRNN.mode = 'smooth'
-    configSRNN.dimRecD = [500]
-    configSRNN.dimRecA = [500]
-    configSRNN.dimEnc = [400]
-    configSRNN.dimDec = [400]
-    configSRNN.dimMLPx = [400]
-    configSRNN.dimInput = 128
-    configSRNN.dimState = 500
-    configSRNN.init_scale = 0.01
-    configSRNN.eventPath = './binSRNN-s/'
-    configSRNN.savePath = './binSRNN-s/'
-    configSRNN.loadPath = os.path.join(configSRNN.savePath, 'SRNN-s')
-    SRNN = binSRNN(configSRNN)
-
     if Flag == 'training':
         # Check whether the target event path exists.
         if not os.path.exists(Config.eventPath):
@@ -60,14 +43,31 @@ if __name__ == '__main__':
         if not os.path.exists(Config.savePath):
             os.makedirs(Config.savePath)
         # Add the save file name into the save path.
-        Config.savePath = os.path.join(Config.savePath, 'ssRNNRBM')
+        Config.savePath = os.path.join(Config.savePath, 'CGRNN-f')
         # Build the model and prepare the data-set.
         RnnRbm = binCGRNN(Config)
-        full_train(model=RnnRbm, dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=300, learning_rate=0.1,
+        full_train(model=RnnRbm, dataset=Dataset, maxEpoch=300, batchSize=75, earlyStop=300, learning_rate=0.1,
                           valid_batchSize=25, saveto=SAVETO)
 
     if Flag == 'evaluation':
-        Config.loadPath = os.path.join(Config.savePath, 'ssRNNRBM')
+        # REFERENCE MODEL.
+        configSRNN.Opt = 'SGD'
+        configSRNN.unitType = 'GRU'
+        configSRNN.mode = 'smooth'
+        configSRNN.dimRecD = [500]
+        configSRNN.dimRecA = [500]
+        configSRNN.dimEnc = [400]
+        configSRNN.dimDec = [400]
+        configSRNN.dimMLPx = [400]
+        configSRNN.dimInput = 128
+        configSRNN.dimState = 500
+        configSRNN.init_scale = 0.01
+        configSRNN.eventPath = './binSRNN-s/'
+        configSRNN.savePath = './binSRNN-s/'
+        configSRNN.loadPath = os.path.join(configSRNN.savePath, 'SRNN-s')
+        SRNN = binSRNN(configSRNN)
+        #
+        Config.loadPath = os.path.join(Config.savePath, 'CGRNN-f')
         RnnRbm = binCGRNN(Config, VAE=SRNN)
         print('Evaluation: start computing the accuracy metric.')
         ACC, NLL = accRBM(RnnRbm, Dataset['test'], batchSize=25)

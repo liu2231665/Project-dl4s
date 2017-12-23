@@ -78,7 +78,7 @@ class CGCell(tf.contrib.rnn.RNNCell):
                 if self._inputType == 'binary':
                     self.RBM = bin_ssRBM(dimV=self._config.dimInput, dimH=self._config.dimState,
                                          init_scale=self._init_scale,alphaTrain=self._config.alphaTrain,
-                                         muTrain=self._config.muTrain,
+                                         muTrain=self._config.muTrain, bv=self._b_bv, bh=self._b_bh,
                                          k=self._gibbs, CGRNN=True)
                 elif self._inputType == 'continuous':
                     self.RBM = mu_ssRBM(dimV=self._config.dimInput, dimH=self._config.dimState,
