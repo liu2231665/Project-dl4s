@@ -936,7 +936,7 @@ class bin_ssRBM(object):
     #########################################################################"""
     def FreeEnergy(self, V, beta=1.0):
         #
-        lin_term = tf.tensordot(V, self._bv, [[-1], [-1]])
+        lin_term = tf.reduce_sum(V * self._bv, axis=[-1])
         con_term = 0.5 * tf.reduce_sum(tf.log(2 * np.pi) - tf.log(self._alpha + 1e-8))
         #
         factorV = tf.tensordot(V, beta * self._W, [[-1], [0]])  # shape = [..., dimH]

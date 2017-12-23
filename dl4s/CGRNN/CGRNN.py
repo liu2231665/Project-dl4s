@@ -60,7 +60,6 @@ class _CGRNN(object):
             self._train_step = None
             self._nll = None
             self._monitor = None
-            self.VAE = None
             # <Tensorflow Optimizer>.
             if config.Opt == 'Adadelta':
                 self._optimizer = tf.train.AdadeltaOptimizer(learning_rate=self.lr)
@@ -116,14 +115,14 @@ class binCGRNN(_CGRNN, object):
     """#########################################################################
     __init__:the initialization function.
     input: Config - configuration class in ./utility.
-           VAE - if a well trained VAE is provided. Using NVIL to estimate the
+           binRNN - if a well trained binRNN is provided. Using NVIL to estimate the
                  upper bound of the partition function.
     output: None.
     #########################################################################"""
     def __init__(
             self,
             config=configCGRNN(),
-            VAE=None
+            binRNN=None
     ):
         super().__init__(config)
         """build the graph"""
@@ -141,17 +140,17 @@ class binCGRNN(_CGRNN, object):
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(self._loss)
             #
-            if VAE is None:
+            if binRNN is None:
                 self._logZ = self.Cell.RBM.AIS(self._aisRun, self._aisLevel,
                                            tf.shape(self.x)[0], tf.shape(self.x)[1])
                 self._nll = tf.reduce_mean(self.Cell.RBM.FreeEnergy(self.x) + self._logZ)
-                self.VAE = VAE
+                self.binRNN = binRNN
             else:
-                self._logZ = self._NVIL_VAE(VAE)  # X, logPz_X, logPx_Z, logPz, VAE.x
+                self._logZ = self._NVIL_RNN(binRNN, config.aisRun)  # X, logPz_X, logPx_Z, logPz, VAE.x
                 self.xx = tf.placeholder(dtype='float32', shape=[None, None, None, config.dimInput])
                 self.FEofSample = self.Cell.RBM.FreeEnergy(self.xx)
                 self.FEofInput = self.Cell.RBM.FreeEnergy(self.x)
-                self.VAE = VAE
+                self.binRNN = binRNN
             #
             self._runSession()
             pass
@@ -209,27 +208,21 @@ class binCGRNN(_CGRNN, object):
     """#########################################################################
     _NVIL_VAE: generate the graph to compute the NVIL upper bound of log Partition
                function by a well-trained VAE.
-    input: VAE - the well-trained VAE(SRNN/VRNN).
+    input: RNN - the well-trained binary autoregressive RNN.
+           runs - the number of samples.
     output: the upper boundLogZ.
     #########################################################################"""
-    def _NVIL_VAE(self, VAE):
+    def _NVIL_RNN(self, binRNN, runs=100):
         # get the marginal and conditional distribution of the VAE.
-        probs = VAE._dec
+        probs = binRNN._outputs
         Px_Z = tf.distributions.Bernoulli(probs=probs, dtype=tf.float32)
-        mu, std = VAE._enc
-        Pz_X = tf.distributions.Normal(loc=mu, scale=std)
-        mu, std = VAE._prior
-        Pz = tf.distributions.Normal(loc=mu, scale=std)
         # generate the samples.
-        X = Px_Z.sample()
-        logPz_X = tf.reduce_sum(Pz_X.log_prob(VAE._Z), axis=[-1])  # shape = [batch, steps]
-        #logPx_Z = tf.reduce_prod(Px_Z.log_prob(X), axis=[-1])
-        logPx_Z = tf.reduce_sum(
+        X = Px_Z.sample(runs)
+        logPx = tf.reduce_sum(
             (1 - X) * tf.log(tf.maximum(tf.minimum(1.0, 1 - probs), 1e-32))
             + X * tf.log(tf.maximum(tf.minimum(1.0, probs), 1e-32)),
             axis=[-1])  # shape = [runs, batch, steps]
-        logPz = tf.reduce_sum(Pz.log_prob(VAE._Z), axis=[-1])
-        return X, logPz_X, logPx_Z, logPz, VAE.x
+        return X, logPx, binRNN.x
 
     """#########################################################################
     ais_function: compute the approximated negative log-likelihood with partition
@@ -239,24 +232,13 @@ class binCGRNN(_CGRNN, object):
     #########################################################################"""
     def ais_function(self, input):
         with self._graph.as_default():
-            if self.VAE is None:
+            if self.binRNN is None:
                 loss_value = self._sess.run(self._nll, feed_dict={self.x: input})
             else:
                 loss_value = []
-                X = []
-                logPz_X = []
-                logPz = []
-                for i in range(self._aisRun):
-                    Xi, logPz_Xi, logPx_Zi, logPzi = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
-                    X.append(Xi)
-                    logPz_X.append(logPz_Xi)
-                    logPz.append(logPzi)
-                    # shape = [runs, batch, steps]
-                X = np.asarray(X)
-                logPz_X = np.asarray(logPz_X)
-                logPz = np.asarray(logPz)
+                X, logPx = self.binRNN._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
                 FEofSample = self._sess.run(self.FEofSample, feed_dict={self.xx: X, self.x: input})
-                logTerm = 2 * (-FEofSample + logPz_X - logPz)
+                logTerm = 2 * (-FEofSample - logPx)
                 logTerm_max = np.max(logTerm, axis=0)
                 r_ais = np.mean(np.exp(logTerm - logTerm_max), axis=0)
                 logZ = 0.5 * (np.log(r_ais+1e-38) + logTerm_max)

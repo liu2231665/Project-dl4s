@@ -411,18 +411,21 @@ class binRnnRBM(_RnnRBM, object):
                 loss_value = []
                 X = []
                 logPz_X = []
+                logPx_Z = []
                 logPz = []
                 for i in range(self._aisRun):
                     Xi, logPz_Xi, logPx_Zi, logPzi = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
                     X.append(Xi)
                     logPz_X.append(logPz_Xi)
+                    logPx_Z.append(np.nan_to_num(logPx_Zi))
                     logPz.append(logPzi)
                     # shape = [runs, batch, steps]
                 X = np.asarray(X)
                 logPz_X = np.asarray(logPz_X)
+                logPx_Z = np.asarray(logPx_Z)
                 logPz = np.asarray(logPz)
                 FEofSample = self._sess.run(self.FEofSample, feed_dict={self.xx: X, self.x: input})
-                logTerm = 2 * (-FEofSample + logPz_X - logPz)
+                logTerm = 2 * (-FEofSample + logPz_X - logPx_Z - logPz)
                 logTerm_max = np.max(logTerm, axis=0)
                 r_ais = np.mean(np.exp(logTerm - logTerm_max), axis=0)
                 logZ = 0.5 * (np.log(r_ais+1e-38) + logTerm_max)
@@ -827,18 +830,21 @@ class binssRNNRBM(_RnnRBM, object):
                 loss_value = []
                 X = []
                 logPz_X = []
+                logPx_Z = []
                 logPz = []
                 for i in range(self._aisRun):
                     Xi, logPz_Xi, logPx_Zi, logPzi = self.VAE._sess.run(self._logZ[0:-1], feed_dict={self._logZ[-1]: input})
                     X.append(Xi)
                     logPz_X.append(logPz_Xi)
+                    logPx_Z.append(np.nan_to_num(logPx_Zi))
                     logPz.append(logPzi)
                     # shape = [runs, batch, steps]
                 X = np.asarray(X)
                 logPz_X = np.asarray(logPz_X)
+                logPx_Z = np.asarray(logPx_Z)
                 logPz = np.asarray(logPz)
                 FEofSample = self._sess.run(self.FEofSample, feed_dict={self.xx: X, self.x: input})
-                logTerm = 2 * (-FEofSample + logPz_X - logPz)
+                logTerm = 2 * (-FEofSample + logPz_X - logPx_Z - logPz)
                 logTerm_max = np.max(logTerm, axis=0)
                 r_ais = np.mean(np.exp(logTerm - logTerm_max), axis=0)
                 logZ = 0.5 * (np.log(r_ais+1e-38) + logTerm_max)
