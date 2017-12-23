@@ -17,7 +17,7 @@ Config.mode = 'full'
 Config.Opt = 'SGD'
 Config.unitType = 'GRU'
 Config.aisLevel = 100
-Config.aisRun = 50
+Config.aisRun = 100
 Config.dimRec = [500]
 Config.dimMlp = [400, 400]
 Config.dimInput = 128
@@ -31,7 +31,7 @@ Config.eventPath = './binCGRNN-f/'
 Config.savePath = './binCGRNN-f/'
 SAVETO = './binCGRNN-f/historyCGRNN-f.npz'
 
-Flag = 'training'                       # {'training'/'evaluation'}
+Flag = 'evaluation'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
     Dataset = fetchData()
