@@ -260,12 +260,11 @@ class binCGRNN(_CGRNN, object):
                 logPz = np.asarray(logPz, dtype=np.float64)
                 FEofSample = self._sess.run(self.FEofSample, feed_dict={self.xx: X, self.x: input})
                 FEofSample = np.cast[np.float64](FEofSample)
-                logTerm = 2 * (-FEofSample + logPz_X - logPx_Z - logPz) / self._dimInput
-                logTerm_max = np.max(logTerm, axis=0)
-                r_ais = np.mean(np.exp(logTerm - logTerm_max), axis=0)
-                logZ = 0.5 * (np.log(r_ais+1e-38) + logTerm_max)
+                logTerm = 2 * (-FEofSample + logPz_X - logPx_Z - logPz) / 1000 #self._dimInput
+                r_ais = np.mean(np.exp(logTerm), axis=0)
+                logZ = 0.5 * (np.log(r_ais+1e-38))
                 FEofInput = self._sess.run(self.FEofInput, feed_dict={self.x: input})
                 FEofInput = np.cast[np.float64](FEofInput)
-                loss_value.append(np.mean(FEofInput + logZ * self._dimInput))
+                loss_value.append(np.mean(FEofInput + logZ * 1000))#self._dimInput))
                 loss_value = np.asarray(loss_value).mean()
         return loss_value

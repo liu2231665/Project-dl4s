@@ -13,11 +13,11 @@ from dl4s.tools import full_train
 from Projects.LakhMidi.accTool import accRBM
 import os
 
-Config.mode = 'full'
+Config.mode = 'S'
 Config.Opt = 'SGD'
 Config.unitType = 'GRU'
 Config.aisLevel = 100
-Config.aisRun = 50
+Config.aisRun = 100
 Config.dimRec = [500]
 Config.dimMlp = [400, 400]
 Config.dimInput = 128
@@ -27,11 +27,11 @@ Config.Gibbs = 1
 Config.W_Norm = False
 Config.muTrain = True
 Config.alphaTrain = True
-Config.eventPath = './binCGRNN-f/'
-Config.savePath = './binCGRNN-f/'
-SAVETO = './binCGRNN-f/historyCGRNN-f.npz'
+Config.eventPath = './binCGRNN-p/'
+Config.savePath = './binCGRNN-p/'
+SAVETO = './binCGRNN-p/historyCGRNN-p.npz'
 
-Flag = 'evaluation'                       # {'training'/'evaluation'}
+Flag = 'training'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
     Dataset = fetchData()
@@ -43,7 +43,7 @@ if __name__ == '__main__':
         if not os.path.exists(Config.savePath):
             os.makedirs(Config.savePath)
         # Add the save file name into the save path.
-        Config.savePath = os.path.join(Config.savePath, 'CGRNN-f')
+        Config.savePath = os.path.join(Config.savePath, 'CGRNN-p')
         # Build the model and prepare the data-set.
         RnnRbm = binCGRNN(Config)
         full_train(model=RnnRbm, dataset=Dataset, maxEpoch=300, batchSize=75, earlyStop=300, learning_rate=0.1,
@@ -70,6 +70,6 @@ if __name__ == '__main__':
         Config.loadPath = os.path.join(Config.savePath, 'CGRNN-f')
         RnnRbm = binCGRNN(Config, VAE=SRNN)
         print('Evaluation: start computing the accuracy metric.')
-        ACC, NLL = accRBM(RnnRbm, Dataset['test'], batchSize=5)
+        ACC, NLL = accRBM(RnnRbm, Dataset['test'], batchSize=25)
         print('The testing transcription accuracy is \x1b[1;91m%10.4f\x1b[0m.' % ACC)
         print('The testing transcription NLL is \x1b[1;91m%10.4f\x1b[0m.' % NLL)
