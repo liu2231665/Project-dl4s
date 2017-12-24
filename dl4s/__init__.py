@@ -13,4 +13,4 @@ from dl4s.TRBM.utility import configRNNRBM, configssRNNRBM
 from dl4s.TRBM.RnnRBM import binRnnRBM, gaussRnnRBM, ssRNNRBM, binssRNNRBM
 # CGRNN.
 from dl4s.CGRNN.utility import configCGRNN
-from dl4s.CGRNN.CGRNN import binCGRNN
+from dl4s.CGRNN.CGRNN import binCGRNN, gaussCGRNN

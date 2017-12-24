@@ -85,7 +85,7 @@ class CGCell(tf.contrib.rnn.RNNCell):
                                         init_scale=self._config.init_scale,
                                         alphaTrain=self._config.alphaTrain,
                                         muTrain=self._config.muTrain, phiTrain=self._config.phiTrain,
-                                        k=self._config.gibbs)
+                                        k=self._gibbs, CGRNN=True)
                 else:
                     raise ValueError("The input type should be either binary or continuous!!")
 

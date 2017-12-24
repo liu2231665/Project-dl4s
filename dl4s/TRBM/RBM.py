@@ -153,6 +153,47 @@ class _RBM(object):
         posPhase = tf.reduce_mean(self.FreeEnergy(V))
         return posPhase - negPhase
 
+    """#########################################################################
+    _ais_term: compute the ais term of te partition function 
+               by annealed importance sampling.
+    input: run - the number of samples.
+           levels - the number of intermediate proposals.
+           samplesteps - the number of sample to be drawn. Default is 1.
+           Batch - indicate whether the parameter is batch.
+           Seq - indicate whether the parameter is batch.
+    output: the log partition function logZB in tensor.
+    #########################################################################"""
+    def _ais_term(self, run=10, levels=10, Batch=None, Seq=None):
+        if Batch is not None and Seq is None:
+            sample = tf.zeros(shape=[run, Batch, self._dimV])
+        elif Batch is None and Seq is not None:
+            sample = tf.zeros(shape=[run, Seq, self._dimV])
+        elif Batch is not None and Seq is not None:
+            sample = tf.zeros(shape=[run, Batch, Seq, self._dimV])
+        else:
+            sample = tf.zeros(shape=[run, self._dimV])
+
+        beta = tf.constant(value=1.0)
+        # logwk is the weighted matrix.
+        logWk = tf.zeros(shape=tf.shape(sample)[0:-1], dtype=tf.float32)
+        sample = self.GibbsSampling(V=sample, beta=0.0)[0]
+
+        # the cond and body for tf.while_loop
+        def cond(sample, beta, logWk):
+            return beta <= levels
+        #
+        def body(sample, beta, logWk):
+            newsample = self.GibbsSampling(V=sample, beta=beta/levels)[0]
+            logp_k = -self.FreeEnergy(V=newsample, beta=beta/levels)
+            logp_km1 = -self.FreeEnergy(V=newsample, beta=(beta-1)/levels)
+            logWk += logp_k - logp_km1
+            return newsample, beta + 1, logWk
+
+        _, _, logWk = tf.while_loop(cond=cond, body=body, loop_vars=[sample, beta, logWk])
+        # compute the average weight. [...]
+        log_wk_mean = tf.reduce_max(logWk, axis=0)
+        r_ais = tf.reduce_mean(tf.exp(logWk - log_wk_mean), axis=0)
+        return tf.log(r_ais) + log_wk_mean
 
 """#########################################################################
 Class: binRBM - the RBM model for binary observations
@@ -237,39 +278,7 @@ class binRBM(_RBM, object):
         # proposal partition function with shape []/[...].
         logZA = tf.reduce_sum(tf.nn.softplus(self._bv), axis=-1) + \
                 tf.reduce_sum(tf.nn.softplus(self._bh), axis=-1)
-        if Batch is not None and Seq is None:
-            sample = tf.zeros(shape=[run, Batch, self._dimV])
-        elif Batch is None and Seq is not None:
-            sample = tf.zeros(shape=[run, Seq, self._dimV])
-        elif Batch is not None and Seq is not None:
-            sample = tf.zeros(shape=[run, Batch, Seq, self._dimV])
-        else:
-            sample = tf.zeros(shape=[run, self._dimV])
-        # Define the intermediate levels.
-        betas = np.random.rand(levels)
-        betas.sort()
-        sample, _, _, _ = self.GibbsSampling(V=sample, beta=0.0)
-        # logwk is the weighted matrix.
-        logwk = tf.zeros(shape=tf.shape(sample)[0:-1], dtype=tf.float32)
-        for i in range(len(betas)):
-            sample, _, _, _ = self.GibbsSampling(V=sample, beta=betas[i])
-            # logp_k, logp_km1 shape [run, ...]
-            logp_k = -self.FreeEnergy(V=sample, beta=betas[i])
-            if i != 0:
-                logp_km1 = -self.FreeEnergy(V=sample, beta=betas[i-1])
-            else:
-                logp_km1 = -self.FreeEnergy(V=sample, beta=0.0)
-            logwk += logp_k - logp_km1
-        # beta = 1.0
-        sample, _, _, _ = self.GibbsSampling(V=sample, beta=1.0)
-        logp_k = -self.FreeEnergy(V=sample, beta=1.0)
-        logp_km1 = -self.FreeEnergy(V=sample, beta=betas[-1])
-        logwk += logp_k - logp_km1
-
-        # compute the average weight. [...]
-        log_wk_mean = tf.reduce_mean(logwk, axis=0)
-        r_ais = tf.reduce_mean(tf.exp(logwk-log_wk_mean), axis=0)
-        return logZA + tf.log(r_ais) + log_wk_mean
+        return logZA + self._ais_term(run, levels, Batch, Seq)
 
 
 """#########################################################################
@@ -375,39 +384,7 @@ class gaussRBM(_RBM, object):
         logZA_term1 = 0.5 * tf.log(2*np.pi) + tf.log(tf.nn.softplus(self._std))
         logZA = tf.reduce_sum(logZA_term1, axis=-1) + \
                 tf.reduce_sum(tf.nn.softplus(self._bh), axis=-1)
-        if Batch is not None and Seq is None:
-            sample = tf.zeros(shape=[run, Batch, self._dimV])
-        elif Batch is None and Seq is not None:
-            sample = tf.zeros(shape=[run, Seq, self._dimV])
-        elif Batch is not None and Seq is not None:
-            sample = tf.zeros(shape=[run, Batch, Seq, self._dimV])
-        else:
-            sample = tf.zeros(shape=[run, self._dimV])
-        # Define the intermediate levels.
-        betas = np.random.rand(levels)
-        betas.sort()
-        sample, _, _, _ = self.GibbsSampling(V=sample, beta=0.0)
-        # logwk is the weighted matrix.
-        logwk = tf.zeros(shape=tf.shape(sample)[0:-1], dtype=tf.float32)
-        for i in range(len(betas)):
-            sample, _, _, _ = self.GibbsSampling(V=sample, beta=betas[i])
-            # logp_k, logp_km1 shape [run, ...]
-            logp_k = -self.FreeEnergy(V=sample, beta=betas[i])
-            if i != 0:
-                logp_km1 = -self.FreeEnergy(V=sample, beta=betas[i - 1])
-            else:
-                logp_km1 = -self.FreeEnergy(V=sample, beta=0.0)
-            logwk += logp_k - logp_km1
-        # beta = 1.0
-        sample, _, _, _ = self.GibbsSampling(V=sample, beta=1.0)
-        logp_k = -self.FreeEnergy(V=sample, beta=1.0)
-        logp_km1 = -self.FreeEnergy(V=sample, beta=betas[-1])
-        logwk += logp_k - logp_km1
-
-        # compute the average weight. [...]
-        log_wk_mean = tf.reduce_mean(logwk, axis=0)
-        r_ais = tf.reduce_mean(tf.exp(logwk - log_wk_mean), axis=0)
-        return logZA + tf.log(r_ais) + log_wk_mean
+        return logZA + self._ais_term(run, levels, Batch, Seq)
 
 
 
@@ -460,7 +437,8 @@ class mu_ssRBM(object):
             phiTrain=False,
             scope=None,
             bound=[-25.0, 25.0],
-            k=1
+            k=1,
+            CGRNN=False
     ):
         self._sess = tf.Session()
         # the proposal distribution.
@@ -528,6 +506,9 @@ class mu_ssRBM(object):
                     self._phi = tf.nn.relu(tf.get_variable('phi', shape=(self._dimH, self._dimV)))
                 else:
                     self._phi = tf.zeros(shape=(self._dimH, self._dimV), name='phi')
+            # if it's used in CGRNN, don't create this part of graph.
+            if CGRNN:
+                return
             # x = [batch, steps, dimV]. O.w, we define it as non-temporal data with shape [batch,dimV].
             self._V = x if x is not None else tf.placeholder(dtype=tf.float32, shape=[None, dimV], name='V')
             # <tensor placeholder> learning rate.
@@ -562,7 +543,7 @@ class mu_ssRBM(object):
     def sampleHgivenV(self, V, beta=1.0):
         factorV = tf.tensordot(V, beta * self._W, [[-1], [0]])  # shape = [..., dimH]
         sqr_term = (0.5 * factorV ** 2) / (self._alpha + 1e-8) \
-                   - 0.5 * tf.tensordot(V**2, tf.transpose(self._phi), [[-1], [0]])
+                   - 0.5 * tf.tensordot(V**2, beta * tf.transpose(self._phi), [[-1], [0]])
         lin_term = factorV * self._mu
         if beta == 0.0:
             meanH_v = tf.nn.sigmoid(self._bh, name='meanH_v')
@@ -636,8 +617,8 @@ class mu_ssRBM(object):
     output: the average free energy per frame with shape [batch]
     #########################################################################"""
     def FreeEnergy(self, V, beta=1.0):
-        sqr_term = 0.5 * tf.tensordot(V**2, self._gamma, [[-1], [0]])
-        lin_term = tf.tensordot(V, self._bv, [[-1], [0]])
+        sqr_term = 0.5 * tf.reduce_sum(V**2 * self._gamma, axis=[-1])
+        lin_term = tf.reduce_sum(V * self._bv, axis=[-1])
         con_term = 0.5 * tf.reduce_sum(tf.log(2*np.pi) - tf.log(self._alpha + 1e-8))
         #
         factorV = tf.tensordot(V, beta * self._W, [[-1], [0]])  # shape = [..., dimH]
@@ -677,9 +658,9 @@ class mu_ssRBM(object):
     #########################################################################"""
     def AIS(self, run=10, levels=10, Batch=None, Seq=None):
         # proposal partition function with shape []/[...].
-        logZA_term1 = 0.5 * tf.tensordot(self._bv**2, 1/(self._gamma+1e-8), [[-1], [0]])
+        logZA_term1 = 0.5 * tf.reduce_sum(self._bv**2 / (self._gamma+1e-8), axis=[-1])
         logZA_term2 = 0.5 * tf.reduce_sum(tf.log(2*np.pi/(self._gamma+1e-8)), axis=[-1])
-        logZA_term3 = 0.5 * self._dimV * tf.reduce_sum(tf.log(2*np.pi) - tf.log(1e-8))
+        logZA_term3 = 0.5 * tf.reduce_sum(tf.log(2*np.pi) - tf.log(self._alpha + 1e-38))
         logZA_term4 = tf.reduce_sum(tf.nn.softplus(self._bh), axis=-1)
         logZA = logZA_term1 + logZA_term2 + logZA_term3 + logZA_term4
 
@@ -691,38 +672,27 @@ class mu_ssRBM(object):
             sample = tf.zeros(shape=[run, Batch, Seq, self._dimV])
         else:
             sample = tf.zeros(shape=[run, self._dimV])
-        # Define the intermediate levels.
-        betas = 0.5 * np.random.rand(levels) + 0.5
-        betas.sort()
-        sample, _, _, _, _, _ = self.GibbsSampling(V=sample, beta=0.0)
-        sample = tf.maximum(self._bound[0], sample)
-        sample = tf.minimum(self._bound[1], sample)
+        beta = tf.constant(value=1.0)
         # logwk is the weighted matrix.
-        logwk = tf.zeros(shape=tf.shape(sample)[0:-1], dtype=tf.float32)
-        for i in range(len(betas)):
-            sample, _, _, _, _, _ = self.GibbsSampling(V=sample, beta=betas[i])
-            sample = tf.maximum(self._bound[0], sample)
-            sample = tf.minimum(self._bound[1], sample)
-            # logp_k, logp_km1 shape [run, ...]
-            logp_k = -self.FreeEnergy(V=sample, beta=betas[i])
-            if i != 0:
-                logp_km1 = -self.FreeEnergy(V=sample, beta=betas[i - 1])
-            else:
-                logp_km1 = -self.FreeEnergy(V=sample, beta=0.0)
-            logwk += logp_k - logp_km1
-        # beta = 1.0
-        sample, _, _, _, _, _ = self.GibbsSampling(V=sample, beta=1.0)
-        sample = tf.maximum(self._bound[0], sample)
-        sample = tf.minimum(self._bound[1], sample)
-        logp_k = -self.FreeEnergy(V=sample, beta=1.0)
-        logp_km1 = -self.FreeEnergy(V=sample, beta=betas[-1])
-        logwk += logp_k - logp_km1
+        logWk = tf.zeros(shape=tf.shape(sample)[0:-1], dtype=tf.float32)
+        sample = self.GibbsSampling(V=sample, beta=0.0)[0]
+        # the cond and body for tf.while_loop
+        def cond(sample, beta, logWk):
+            return beta <= levels
+        #
+        def body(sample, beta, logWk):
+            newsample = self.GibbsSampling(V=sample, beta=beta/levels)[0]
+            logp_k = -self.FreeEnergy(V=newsample, beta=beta/levels)
+            logp_km1 = -self.FreeEnergy(V=newsample, beta=(beta-1)/levels)
+            logWk += logp_k - logp_km1
+            return newsample, beta + 1, logWk
+
+        _, _, logWk = tf.while_loop(cond=cond, body=body, loop_vars=[sample, beta, logWk])
 
         # compute the average weight. [...]
-        log_wk_mean = tf.reduce_max(logwk, axis=0)
-        r_ais = tf.reduce_mean(tf.exp(logwk - log_wk_mean), axis=0)
-        #return sample
-        return logZA + log_wk_mean + tf.log(r_ais)
+        log_wk_mean = tf.reduce_max(logWk, axis=0)
+        r_ais = tf.reduce_mean(tf.exp(logWk - log_wk_mean), axis=0)
+        return logZA + tf.log(r_ais) + log_wk_mean
 
     """#########################################################################
     add_constraint: compute the partition function by annealed importance sampling.
@@ -977,7 +947,8 @@ class bin_ssRBM(object):
         # proposal partition function with shape []/[...].
         logZA_term1 = tf.reduce_sum(tf.nn.softplus(self._bv), axis=-1)
         logZA_term2 = tf.reduce_sum(tf.nn.softplus(self._bh), axis=-1)
-        logZA = logZA_term1 + logZA_term2
+        logZA_term3 = 0.5 * tf.reduce_sum(tf.log(2*np.pi) - tf.log(self._alpha + 1e-38))
+        logZA = logZA_term1 + logZA_term2 + logZA_term3
 
         if Batch is not None and Seq is None:
             sample = tf.zeros(shape=[run, Batch, self._dimV])
@@ -987,30 +958,27 @@ class bin_ssRBM(object):
             sample = tf.zeros(shape=[run, Batch, Seq, self._dimV])
         else:
             sample = tf.zeros(shape=[run, self._dimV])
-        # Define the intermediate levels.
-        betas = np.random.rand(levels)
-        betas.sort()
-        sample, _, _, _, _, _ = self.GibbsSampling(V=sample, beta=0.0)
+
+        beta = tf.constant(value=1.0)
         # logwk is the weighted matrix.
-        logwk = tf.zeros(shape=tf.shape(sample)[0:-1], dtype=tf.float32)
-        for i in range(len(betas)):
-            sample, _, _, _, _, _ = self.GibbsSampling(V=sample, beta=betas[i])
-            # logp_k, logp_km1 shape [run, ...]
-            logp_k = -self.FreeEnergy(V=sample, beta=betas[i])
-            if i != 0:
-                logp_km1 = -self.FreeEnergy(V=sample, beta=betas[i - 1])
-            else:
-                logp_km1 = -self.FreeEnergy(V=sample, beta=0.0)
-            logwk += logp_k - logp_km1
-        # beta = 1.0
-        sample, _, _, _, _, _ = self.GibbsSampling(V=sample, beta=1.0)
-        logp_k = -self.FreeEnergy(V=sample, beta=1.0)
-        logp_km1 = -self.FreeEnergy(V=sample, beta=betas[-1])
-        logwk += logp_k - logp_km1
+        logWk = tf.zeros(shape=tf.shape(sample)[0:-1], dtype=tf.float32)
+        sample = self.GibbsSampling(V=sample, beta=0.0)[0]
+        # the cond and body for tf.while_loop
+        def cond(sample, beta, logWk):
+            return beta <= levels
+        #
+        def body(sample, beta, logWk):
+            newsample = self.GibbsSampling(V=sample, beta=beta/levels)[0]
+            logp_k = -self.FreeEnergy(V=newsample, beta=beta/levels)
+            logp_km1 = -self.FreeEnergy(V=newsample, beta=(beta-1)/levels)
+            logWk += logp_k - logp_km1
+            return newsample, beta + 1, logWk
+
+        _, beta, logWk = tf.while_loop(cond=cond, body=body, loop_vars=[sample, beta, logWk])
 
         # compute the average weight. [...]
-        log_wk_mean = tf.reduce_mean(logwk, axis=0)
-        r_ais = tf.reduce_mean(tf.exp(logwk - log_wk_mean), axis=0)
+        log_wk_mean = tf.reduce_max(logWk, axis=0)
+        r_ais = tf.reduce_mean(tf.exp(logWk - log_wk_mean), axis=0)
         return logZA + tf.log(r_ais) + log_wk_mean
 
     """#########################################################################

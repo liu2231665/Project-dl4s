@@ -268,3 +268,104 @@ class binCGRNN(_CGRNN, object):
                 loss_value.append(np.mean(FEofInput + logZ * 1000))#self._dimInput))
                 loss_value = np.asarray(loss_value).mean()
         return loss_value
+
+
+"""#########################################################################
+Class: gaussCGRNN - the CGRNN mode for continuous input.
+#########################################################################"""
+class gaussCGRNN(_CGRNN, object):
+    """#########################################################################
+    __init__:the initialization function.
+    input: Config - configuration class in ./utility.
+           VAE - if a well trained VAE is provided. Using NVIL to estimate the
+                 upper bound of the partition function.
+    output: None.
+    #########################################################################"""
+    def __init__(
+            self,
+            config=configCGRNN(),
+            VAE=None
+    ):
+        super().__init__(config)
+        """build the graph"""
+        with self._graph.as_default():
+            self.Cell = CGCell(config, inputType='continuous')
+            state = self.Cell.zero_state(tf.shape(self.x)[0], dtype=tf.float32)
+            (self.newV, self.newH, self.newS, self.muV, self.muH, self.muS,
+             self.bvt, self.bht, self.gamma), _ = tf.nn.dynamic_rnn(self.Cell, self.x, initial_state=state)
+            # update the RBM's bias with bvt & bht, gamma.
+            self.Cell.RBM._bh = self.bht
+            self.Cell.RBM._bv = self.bvt
+            self.Cell.RBM._gamma = self.gamma
+            # the training loss is per frame.
+            self._loss = self.Cell.RBM.ComputeLoss(V=self.x, samplesteps=config.Gibbs)
+            # define the monitor.
+            monitor = tf.reduce_sum((self.x - self.muV) ** 2, axis=-1)
+            self._monitor = tf.sqrt(tf.reduce_mean(monitor))
+            self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+            self._train_step = self._optimizer.minimize(self._loss)
+            #
+            if VAE is None:
+                self._logZ = self.Cell.RBM.AIS(self._aisRun, self._aisLevel,
+                                           tf.shape(self.x)[0], tf.shape(self.x)[1])
+                self._nll = tf.reduce_mean(self.Cell.RBM.FreeEnergy(self.x) + self._logZ)
+                self.VAE = VAE
+            else:
+                self._logZ = self._NVIL_VAE(VAE)  # X, logPz_X, logPx_Z, logPz, VAE.x
+                self.xx = tf.placeholder(dtype='float32', shape=[None, None, None, config.dimInput])
+                self.FEofSample = self.Cell.RBM.FreeEnergy(self.xx)
+                self.FEofInput = self.Cell.RBM.FreeEnergy(self.x)
+                self.VAE = VAE
+            #
+            self._runSession()
+            pass
+
+    """#########################################################################
+    hidden_function: generate the hidden activation of given X represented by
+                     P(H|V).
+    input: input - numerical input.
+           gibbs - the number of gibbs sampling.
+    output: P(H|V).
+    #########################################################################"""
+    def hidden_function(self, input, gibbs=None):
+        # update the RBM's bias with bvt & bht.
+        self.Cell.RBM._bh = self.bht
+        self.Cell.RBM._bv = self.bvt
+        #
+        newV = input
+        with self._graph.as_default():
+            k = gibbs if gibbs is not None else self._gibbs
+            if k == self._gibbs:
+                return self._sess.run(self.muH, feed_dict={self.x: newV})
+            else:
+                for i in range(k - 1):
+                    newV = self._sess.run(self.Cell.RBM.newV0, feed_dict={self.x: newV})
+                return self._sess.run(self.Cell.RBM.muH0, feed_dict={self.x: newV})
+
+    """#########################################################################
+    gen_function: generate samples.
+    input: numSteps - the length of the sample sequence.
+           gibbs - the number of gibbs sampling.
+    output: should be the sample.
+    #########################################################################"""
+    def gen_function(self, x=None, numSteps=None, gibbs=None):
+        # update the RBM's bias with bvt & bht.
+        self.Cell.RBM._bh = self.bht
+        self.Cell.RBM._bv = self.bvt
+        #
+        newV = x
+        with self._graph.as_default():
+            if x is not None:
+                sample = x
+            elif numSteps is not None:
+                sample = np.zeros(shape=(1, numSteps, self._dimInput))
+            else:
+                raise ValueError("Neither input or numSteps is provided!!")
+            newV = sample
+            k = gibbs if gibbs is not None else self._gibbs
+            if k == self._gibbs:
+                newV = self._sess.run(self.newV, feed_dict={self.x: newV})
+            else:
+                for i in range(k):
+                    newV = self._sess.run(self.Cell.RBM.newV0, feed_dict={self.x: newV})
+        return newV if x is not None else newV[0]
