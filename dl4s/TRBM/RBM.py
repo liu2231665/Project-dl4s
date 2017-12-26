@@ -977,9 +977,11 @@ class bin_ssRBM(object):
         _, beta, logWk = tf.while_loop(cond=cond, body=body, loop_vars=[sample, beta, logWk])
 
         # compute the average weight. [...]
-        log_wk_mean = tf.reduce_max(logWk, axis=0)
+        logWk = logWk / 1000
+        log_wk_mean = tf.reduce_mean(logWk, axis=0)
         r_ais = tf.reduce_mean(tf.exp(logWk - log_wk_mean), axis=0)
-        return logZA + tf.log(r_ais) + log_wk_mean
+        return logZA + 1000 * (tf.log(r_ais) + log_wk_mean)
+        #return sample
 
     """#########################################################################
     add_constraint: compute the partition function by annealed importance sampling.

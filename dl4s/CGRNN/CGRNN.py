@@ -170,6 +170,8 @@ class binCGRNN(_CGRNN, object):
                 self._logZ = self.Cell.RBM.AIS(self._aisRun, self._aisLevel,
                                            tf.shape(self.x)[0], tf.shape(self.x)[1])
                 self._nll = tf.reduce_mean(self.Cell.RBM.FreeEnergy(self.x) + self._logZ)
+                #self._nll = self._logZ
+                #self._nll = self.Cell.RBM.FreeEnergy(self.x)
                 self.VAE = VAE
             else:
                 self._logZ = self._NVIL_VAE(VAE)  # X, logPz_X, logPx_Z, logPz, VAE.x

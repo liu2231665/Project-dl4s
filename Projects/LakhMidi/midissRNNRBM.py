@@ -14,8 +14,8 @@ import os
 
 Config.Opt = 'SGD'
 Config.unitType = 'GRU'
-Config.aisLevel = 5000
-Config.aisRun = 2
+Config.aisLevel = 100
+Config.aisRun = 100
 Config.dimRec = [500]
 Config.dimMlp = [400, 400]
 Config.dimInput = 128
@@ -66,7 +66,7 @@ if __name__ == '__main__':
 
     if Flag == 'evaluation':
         Config.loadPath = os.path.join(Config.savePath, 'ssRNNRBM')
-        RnnRbm = binssRNNRBM(Config, VAE=SRNN)
+        RnnRbm = binssRNNRBM(Config)
         print('Evaluation: start computing the accuracy metric.')
         ACC, NLL = accRBM(RnnRbm, Dataset['test'], batchSize=25)
         print('The testing transcription accuracy is \x1b[1;91m%10.4f\x1b[0m.' % ACC)
