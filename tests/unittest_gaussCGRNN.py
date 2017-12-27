@@ -20,7 +20,7 @@ if __name__ == '__main__':
     RNNRBM = gaussCGRNN(Config)
     X = np.random.normal(0, 1.0, size=(10, 25, 10))
     for i in range(10):
-        print("The training RMSE is %f." % RNNRBM.train_function(input=X, lrate=0.1))
+        print("The training RMSE is %f." % RNNRBM.val_function(input=X))
     """
     test the generating sample.
     """
