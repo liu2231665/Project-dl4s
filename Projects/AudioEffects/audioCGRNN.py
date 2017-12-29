@@ -6,7 +6,7 @@ Descriptions: the code to train and run the gaussian CGRNN from dl4s.CGRNN
               ----2017.12.27
 #########################################################################"""
 from Projects.AudioEffects.fetchData import fetchData
-from dl4s import gaussCGRNN, gaussRNN
+from dl4s import gaussCGRNN, gaussSRNN
 from dl4s import configCGRNN as Config
 from dl4s import configSRNN
 from dl4s.tools import full_train
@@ -20,7 +20,7 @@ Config.aisLevel = 100
 Config.aisRun = 100
 Config.dimRec = [500]
 Config.dimMlp = [400, 400]
-Config.dimInput = 128
+Config.dimInput = 150
 Config.dimState = 250
 Config.init_scale = 0.01
 Config.Gibbs = 1
@@ -31,7 +31,7 @@ Config.eventPath = './audioCGRNN-f/'
 Config.savePath = './audioCGRNN-f/'
 SAVETO = './audioCGRNN-f/historyCGRNN-f.npz'
 
-Flag = 'training'                       # {'training'/'evaluation'}
+Flag = 'evaluation'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
     Dataset = fetchData()
@@ -46,7 +46,7 @@ if __name__ == '__main__':
         Config.savePath = os.path.join(Config.savePath, 'CGRNN-f')
         # Build the model and prepare the data-set.
         RnnRbm = gaussCGRNN(Config)
-        full_train(model=RnnRbm, dataset=Dataset, maxEpoch=300, batchSize=75, earlyStop=300, learning_rate=0.001,
+        full_train(model=RnnRbm, dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=300, learning_rate=0.0005,
                           valid_batchSize=75, saveto=SAVETO)
 
     if Flag == 'evaluation':
@@ -65,7 +65,7 @@ if __name__ == '__main__':
         configSRNN.eventPath = './binSRNN-s/'
         configSRNN.savePath = './binSRNN-s/'
         configSRNN.loadPath = os.path.join(configSRNN.savePath, 'SRNN-s')
-        SRNN = gaussRNN(configSRNN)
+        #SRNN = gaussSRNN(configSRNN)
         #
         Config.loadPath = os.path.join(Config.savePath, 'CGRNN-f')
         RnnRbm = gaussCGRNN(Config)

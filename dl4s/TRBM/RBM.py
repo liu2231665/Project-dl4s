@@ -672,6 +672,7 @@ class mu_ssRBM(object):
             sample = tf.zeros(shape=[run, Batch, Seq, self._dimV])
         else:
             sample = tf.zeros(shape=[run, self._dimV])
+
         beta = tf.constant(value=1.0)
         # logwk is the weighted matrix.
         logWk = tf.zeros(shape=tf.shape(sample)[0:-1], dtype=tf.float32)
@@ -687,12 +688,14 @@ class mu_ssRBM(object):
             logWk += logp_k - logp_km1
             return newsample, beta + 1, logWk
 
-        _, _, logWk = tf.while_loop(cond=cond, body=body, loop_vars=[sample, beta, logWk])
+        _, beta, logWk = tf.while_loop(cond=cond, body=body, loop_vars=[sample, beta, logWk])
 
         # compute the average weight. [...]
-        log_wk_mean = tf.reduce_max(logWk, axis=0)
+        # logWk = tf.minimum(logWk, 2000)
+        logWk = logWk / 1000
+        log_wk_mean = tf.reduce_mean(logWk, axis=0)
         r_ais = tf.reduce_mean(tf.exp(logWk - log_wk_mean), axis=0)
-        return logZA + tf.log(r_ais) + log_wk_mean
+        return logZA + 1000 * (tf.log(r_ais) + log_wk_mean)
 
     """#########################################################################
     add_constraint: compute the partition function by annealed importance sampling.
@@ -977,6 +980,7 @@ class bin_ssRBM(object):
         _, beta, logWk = tf.while_loop(cond=cond, body=body, loop_vars=[sample, beta, logWk])
 
         # compute the average weight. [...]
+        # logWk = tf.minimum(logWk, 2000)
         logWk = logWk / 1000
         log_wk_mean = tf.reduce_mean(logWk, axis=0)
         r_ais = tf.reduce_mean(tf.exp(logWk - log_wk_mean), axis=0)
