@@ -51,21 +51,22 @@ if __name__ == '__main__':
 
     if Flag == 'evaluation':
         # REFERENCE MODEL.
-        configSRNN.Opt = 'SGD'
+        configSRNN.Opt = 'Adam'
         configSRNN.unitType = 'GRU'
-        configSRNN.mode = 'smooth'
+        configSRNN.mode = 'filter'
         configSRNN.dimRecD = [500]
         configSRNN.dimRecA = [500]
         configSRNN.dimEnc = [400]
         configSRNN.dimDec = [400]
         configSRNN.dimMLPx = [400]
-        configSRNN.dimInput = 128
+        configSRNN.dimInput = 150
         configSRNN.dimState = 500
         configSRNN.init_scale = 0.01
-        configSRNN.eventPath = './binSRNN-s/'
-        configSRNN.savePath = './binSRNN-s/'
-        configSRNN.loadPath = os.path.join(configSRNN.savePath, 'SRNN-s')
-        #SRNN = gaussSRNN(configSRNN)
+        configSRNN.eventPath = './audioSRNN-f/'
+        configSRNN.savePath = './audioSRNN-f/'
+        SAVETO = './audioSRNN-f/historyaudioSRNN-f.npz'
+        configSRNN.loadPath = configSRNN.savePath
+        SRNN = gaussSRNN(configSRNN)
         #
         Config.loadPath = os.path.join(Config.savePath, 'CGRNN-f')
         RnnRbm = gaussCGRNN(Config)

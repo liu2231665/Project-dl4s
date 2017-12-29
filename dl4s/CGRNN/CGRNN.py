@@ -371,3 +371,43 @@ class gaussCGRNN(_CGRNN, object):
                 for i in range(k):
                     newV = self._sess.run(self.Cell.RBM.newV0, feed_dict={self.x: newV})
         return newV if x is not None else newV[0]
+
+    """#########################################################################
+        ais_function: compute the approximated negative log-likelihood with partition
+                      function computed by annealed importance sampling.
+        input: input - numerical input.
+        output: the negative log-likelihood value.
+        #########################################################################"""
+
+    def ais_function(self, input):
+        with self._graph.as_default():
+            if self.VAE is None:
+                loss_value = self._sess.run(self._nll, feed_dict={self.x: input})
+            else:
+                loss_value = []
+                X = []
+                logPz_X = []
+                logPx_Z = []
+                logPz = []
+                for i in range(self._aisRun):
+                    Xi, logPz_Xi, logPx_Zi, logPzi = self.VAE._sess.run(self._logZ[0:-1],
+                                                                        feed_dict={self._logZ[-1]: input})
+                    X.append(Xi)
+                    logPz_X.append(logPz_Xi)
+                    logPx_Z.append(np.nan_to_num(logPx_Zi))
+                    logPz.append(logPzi)
+                    # shape = [runs, batch, steps]
+                X = np.asarray(X, dtype=np.float64)
+                logPz_X = np.asarray(logPz_X, dtype=np.float64)
+                logPx_Z = np.asarray(logPx_Z, dtype=np.float64)
+                logPz = np.asarray(logPz, dtype=np.float64)
+                FEofSample = self._sess.run(self.FEofSample, feed_dict={self.xx: X, self.x: input})
+                FEofSample = np.cast[np.float64](FEofSample)
+                logTerm = 2 * (-FEofSample + logPz_X - logPx_Z - logPz) / 1000  # self._dimInput
+                r_ais = np.mean(np.exp(logTerm), axis=0)
+                logZ = 0.5 * (np.log(r_ais + 1e-38))
+                FEofInput = self._sess.run(self.FEofInput, feed_dict={self.x: input})
+                FEofInput = np.cast[np.float64](FEofInput)
+                loss_value.append(np.mean(FEofInput + logZ * 1000))  # self._dimInput))
+                loss_value = np.asarray(loss_value).mean()
+        return loss_value
