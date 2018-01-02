@@ -5,7 +5,7 @@ Descriptions: the file contains the model description of CGRNN.
               ----2017.11.15
 #########################################################################"""
 from .utility import configCGRNN, CGCell
-from dl4s.tools import BernoulliNLL
+from dl4s.tools import BernoulliNLL, GaussNLL
 import tensorflow as tf
 import numpy as np
 
@@ -109,31 +109,6 @@ class _CGRNN(object):
             loss_value = self._sess.run(self._monitor, feed_dict={self.x: input})
         return loss_value
 
-    """#########################################################################
-    _NVIL_VAE: generate the graph to compute the NVIL upper bound of log Partition
-               function by a well-trained VAE.
-    input: VAE - the well-trained VAE(SRNN/VRNN).
-    output: the upper boundLogZ.
-    #########################################################################"""
-    def _NVIL_VAE(self, VAE):
-        # get the marginal and conditional distribution of the VAE.
-        probs = VAE._dec
-        Px_Z = tf.distributions.Bernoulli(probs=probs, dtype=tf.float32)
-        mu, std = VAE._enc
-        Pz_X = tf.distributions.Normal(loc=mu, scale=std)
-        mu, std = VAE._prior
-        Pz = tf.distributions.Normal(loc=mu, scale=std)
-        # generate the samples.
-        X = Px_Z.sample()
-        logPz_X = tf.reduce_sum(Pz_X.log_prob(VAE._Z), axis=[-1])  # shape = [batch, steps]
-        # logPx_Z = tf.reduce_prod(Px_Z.log_prob(X), axis=[-1])
-        logPx_Z = tf.reduce_sum(
-            (1 - X) * tf.log(tf.maximum(tf.minimum(1.0, 1 - probs), 1e-32))
-            + X * tf.log(tf.maximum(tf.minimum(1.0, probs), 1e-32)),
-            axis=[-1])  # shape = [runs, batch, steps]
-        logPz = tf.reduce_sum(Pz.log_prob(VAE._Z), axis=[-1])
-        return X, logPz_X, logPx_Z, logPz, VAE.x
-
 """#########################################################################
 Class: binCGRNN - the CGRNN mode for binary input.
 #########################################################################"""
@@ -232,6 +207,31 @@ class binCGRNN(_CGRNN, object):
                 for i in range(k):
                     newV = self._sess.run(self.Cell.RBM.newV0, feed_dict={self.x: newV})
         return newV if x is not None else newV[0]
+
+    """#########################################################################
+    _NVIL_VAE: generate the graph to compute the NVIL upper bound of log Partition
+               function by a well-trained VAE.
+    input: VAE - the well-trained VAE(SRNN/VRNN).
+    output: the upper boundLogZ.
+    #########################################################################"""
+    def _NVIL_VAE(self, VAE):
+        # get the marginal and conditional distribution of the VAE.
+        probs = VAE._dec
+        Px_Z = tf.distributions.Bernoulli(probs=probs, dtype=tf.float32)
+        mu, std = VAE._enc
+        Pz_X = tf.distributions.Normal(loc=mu, scale=std)
+        mu, std = VAE._prior
+        Pz = tf.distributions.Normal(loc=mu, scale=std)
+        # generate the samples.
+        X = Px_Z.sample()
+        logPz_X = tf.reduce_sum(Pz_X.log_prob(VAE._Z), axis=[-1])  # shape = [batch, steps]
+        # logPx_Z = tf.reduce_prod(Px_Z.log_prob(X), axis=[-1])
+        logPx_Z = tf.reduce_sum(
+            (1 - X) * tf.log(tf.maximum(tf.minimum(1.0, 1 - probs), 1e-32))
+            + X * tf.log(tf.maximum(tf.minimum(1.0, probs), 1e-32)),
+            axis=[-1])  # shape = [runs, batch, steps]
+        logPz = tf.reduce_sum(Pz.log_prob(VAE._Z), axis=[-1])
+        return X, logPz_X, logPx_Z, logPz, VAE.x
 
     """#########################################################################
     ais_function: compute the approximated negative log-likelihood with partition
@@ -393,9 +393,9 @@ class gaussCGRNN(_CGRNN, object):
                     Xi, logPz_Xi, logPx_Zi, logPzi = self.VAE._sess.run(self._logZ[0:-1],
                                                                         feed_dict={self._logZ[-1]: input})
                     X.append(Xi)
-                    logPz_X.append(logPz_Xi)
+                    logPz_X.append(np.nan_to_num(logPz_Xi))
                     logPx_Z.append(np.nan_to_num(logPx_Zi))
-                    logPz.append(logPzi)
+                    logPz.append(np.nan_to_num(logPzi))
                     # shape = [runs, batch, steps]
                 X = np.asarray(X, dtype=np.float64)
                 logPz_X = np.asarray(logPz_X, dtype=np.float64)
@@ -411,3 +411,25 @@ class gaussCGRNN(_CGRNN, object):
                 loss_value.append(np.mean(FEofInput + logZ * 1000))  # self._dimInput))
                 loss_value = np.asarray(loss_value).mean()
         return loss_value
+
+    """#########################################################################
+        _NVIL_VAE: generate the graph to compute the NVIL upper bound of log Partition
+                   function by a well-trained VAE.
+        input: VAE - the well-trained VAE(SRNN/VRNN).
+        output: the upper boundLogZ.
+        #########################################################################"""
+
+    def _NVIL_VAE(self, VAE):
+        # get the marginal and conditional distribution of the VAE.
+        mu, std = VAE._dec
+        Px_Z = tf.distributions.Normal(loc=mu, scale=std)
+        mu1, std1 = VAE._enc
+        Pz_X = tf.distributions.Normal(loc=mu1, scale=std1)
+        mu, std = VAE._prior
+        Pz = tf.distributions.Normal(loc=mu, scale=std)
+        # generate the samples.
+        X = Px_Z.sample()
+        logPz_X = tf.reduce_sum(Pz_X.log_prob(VAE._Z), axis=[-1])  # shape = [batch, steps]
+        logPx_Z = tf.reduce_sum(Px_Z.log_prob(X), axis=[-1])
+        logPz = tf.reduce_sum(Pz.log_prob(VAE._Z), axis=[-1])
+        return X, logPz_X, logPx_Z, logPz, VAE.x

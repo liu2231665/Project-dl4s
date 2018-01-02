@@ -13,7 +13,7 @@ from dl4s.tools import full_train
 from Projects.AudioEffects.rmseTool import rmseGaussRNNRBM
 import os
 
-Config.mode = 'full'
+Config.mode = 'D'
 Config.Opt = 'Adam'
 Config.unitType = 'GRU'
 Config.aisLevel = 100
@@ -27,11 +27,11 @@ Config.Gibbs = 1
 Config.W_Norm = True
 Config.muTrain = True
 Config.alphaTrain = True
-Config.eventPath = './audioCGRNN-f/'
-Config.savePath = './audioCGRNN-f/'
-SAVETO = './audioCGRNN-f/historyCGRNN-f.npz'
+Config.eventPath = './audioCGRNN-d/'
+Config.savePath = './audioCGRNN-d/'
+SAVETO = './audioCGRNN-d/historyCGRNN-d.npz'
 
-Flag = 'evaluation'                       # {'training'/'evaluation'}
+Flag = 'training'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
     Dataset = fetchData()
@@ -43,7 +43,7 @@ if __name__ == '__main__':
         if not os.path.exists(Config.savePath):
             os.makedirs(Config.savePath)
         # Add the save file name into the save path.
-        Config.savePath = os.path.join(Config.savePath, 'CGRNN-f')
+        Config.savePath = os.path.join(Config.savePath, 'CGRNN-d')
         # Build the model and prepare the data-set.
         RnnRbm = gaussCGRNN(Config)
         full_train(model=RnnRbm, dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=300, learning_rate=0.0005,
@@ -68,8 +68,8 @@ if __name__ == '__main__':
         configSRNN.loadPath = configSRNN.savePath
         SRNN = gaussSRNN(configSRNN)
         #
-        Config.loadPath = os.path.join(Config.savePath, 'CGRNN-f')
-        RnnRbm = gaussCGRNN(Config)
+        Config.loadPath = os.path.join(Config.savePath, 'CGRNN-d')
+        RnnRbm = gaussCGRNN(Config, VAE=SRNN)
         print('Evaluation: start computing the accuracy metric.')
         ACC, NLL = rmseGaussRNNRBM(RnnRbm, Dataset['test'], batchSize=25)
         print('The testing transcription accuracy is \x1b[1;91m%10.4f\x1b[0m.' % ACC)
