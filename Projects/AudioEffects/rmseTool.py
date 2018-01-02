@@ -43,7 +43,7 @@ def rmseGaussRNNRBM(RNNRBM, testSet, batchSize):
     batches = get_batches_idx(len(testSet), batchSize)
     for Idx in batches:
         x = testSet[Idx.tolist()]           # get the batch of input sequence.
-        ave = RNNRBM.gen_function(x)       # compute the probability of x. [batch, length, frame]
+        ave = RNNRBM.output_function(x)       # compute the probability of x. [batch, length, frame]
         rmse = (x - ave)**2
         rmse = rmse.sum(-1)
         RMSE.append(rmse.mean()*x.shape[0])

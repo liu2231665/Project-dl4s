@@ -181,6 +181,15 @@ class binCGRNN(_CGRNN, object):
                 return self._sess.run(self.Cell.RBM.muH0, feed_dict={self.x: newV})
 
     """#########################################################################
+    output_function: return the conditional mean of the visible layer.
+    input: input - numerical input.
+    output: P(V|parents).
+    #########################################################################"""
+    def output_function(self, input):
+        with self._graph.as_default():
+            return self._sess.run(self.Cell.RBM.muV, feed_dict={self.x: input})
+
+    """#########################################################################
     gen_function: generate samples.
     input: numSteps - the length of the sample sequence.
            gibbs - the number of gibbs sampling.
@@ -373,12 +382,20 @@ class gaussCGRNN(_CGRNN, object):
         return newV if x is not None else newV[0]
 
     """#########################################################################
-        ais_function: compute the approximated negative log-likelihood with partition
-                      function computed by annealed importance sampling.
-        input: input - numerical input.
-        output: the negative log-likelihood value.
-        #########################################################################"""
+    output_function: return the conditional mean of the visible layer.
+    input: input - numerical input.
+    output: P(V|parents).
+    #########################################################################"""
+    def output_function(self, input):
+        with self._graph.as_default():
+            return self._sess.run(self.Cell.RBM.muV, feed_dict={self.x: input})
 
+    """#########################################################################
+    ais_function: compute the approximated negative log-likelihood with partition
+                  function computed by annealed importance sampling.
+    input: input - numerical input.
+    output: the negative log-likelihood value.
+    #########################################################################"""
     def ais_function(self, input):
         with self._graph.as_default():
             if self.VAE is None:
@@ -413,12 +430,11 @@ class gaussCGRNN(_CGRNN, object):
         return loss_value
 
     """#########################################################################
-        _NVIL_VAE: generate the graph to compute the NVIL upper bound of log Partition
-                   function by a well-trained VAE.
-        input: VAE - the well-trained VAE(SRNN/VRNN).
-        output: the upper boundLogZ.
-        #########################################################################"""
-
+    _NVIL_VAE: generate the graph to compute the NVIL upper bound of log Partition
+               function by a well-trained VAE.
+    input: VAE - the well-trained VAE(SRNN/VRNN).
+    output: the upper boundLogZ.
+    #########################################################################"""
     def _NVIL_VAE(self, VAE):
         # get the marginal and conditional distribution of the VAE.
         mu, std = VAE._dec

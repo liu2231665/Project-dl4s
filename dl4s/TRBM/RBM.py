@@ -235,8 +235,8 @@ class binRBM(_RBM, object):
         # Define the proposal Q.
         with tf.variable_scope(self._scopeName, initializer=initializer):
             # pll.
-            _, _, _, Pv_h = self.GibbsSampling(self._V, beta=1.0, k=self._k)
-            self._pll = dimV * BernoulliNLL(self._V, Pv_h)
+            self.newV, self.newH, self.muV, self.muH = self.GibbsSampling(self._V, k=k)
+            self._pll = dimV * BernoulliNLL(self._V, self.muV)
             # one step sample.
             self.newV0, self.newH0, self.muH0, self.muV0 = \
                 self.GibbsSampling(self._V, k=1)
@@ -327,8 +327,8 @@ class gaussRBM(_RBM, object):
             # define the std parameter.
             self._std = std if std is not None else tf.get_variable('std', shape=dimV, initializer=tf.zeros_initializer)
             # pll.
-            _, _, _, muV = self.GibbsSampling(self._V, beta=1.0, k=self._k)
-            self._monitor = tf.reduce_mean(tf.reduce_sum((self._V - muV)**2, axis=[-1]))
+            self.newV, self.newH, self.muV, self.muH = self.GibbsSampling(self._V, k=k)
+            self._monitor = tf.reduce_mean(tf.reduce_sum((self._V - self.muV)**2, axis=[-1]))
             # one step sample.
             self.newV0, self.newH0, self.muH0, self.muV0 = \
                 self.GibbsSampling(self._V, k=1)

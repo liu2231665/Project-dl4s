@@ -7,7 +7,7 @@ Descriptions: the code to train and run the ssRNNRBM
 #########################################################################"""
 from dl4s import ssRNNRBM, gaussSRNN
 from dl4s import configssRNNRBM as Config
-from dl4s import configSRNN
+from dl4s import configSRNN, full_train
 from Projects.AudioEffects.fetchData import fetchData
 from Projects.AudioEffects.rmseTool import rmseGaussRNNRBM
 import os
@@ -41,7 +41,7 @@ if __name__ == '__main__':
         if not os.path.exists(Config.savePath):
             os.makedirs(Config.savePath)
         RnnRbm = ssRNNRBM(Config, Bound=(-25.0, 25.0))
-        RnnRbm.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=300, learning_rate=0.001,
+        full_train(model=RnnRbm, dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=300, learning_rate=0.001,
                        valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':
