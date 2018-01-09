@@ -388,7 +388,7 @@ class gaussCGRNN(_CGRNN, object):
     #########################################################################"""
     def output_function(self, input):
         with self._graph.as_default():
-            return self._sess.run(self.muV, feed_dict={self.x: input})
+            return self._sess.run(self.newV, feed_dict={self.x: input})
 
     """#########################################################################
     ais_function: compute the approximated negative log-likelihood with partition

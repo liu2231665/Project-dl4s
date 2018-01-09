@@ -163,7 +163,7 @@ class _RnnRBM(object):
     #########################################################################"""
     def output_function(self, input):
         with self._graph.as_default():
-            return self._sess.run(self._rbm.muV, feed_dict={self.x: input})
+            return self._sess.run(self._rbm.newV, feed_dict={self.x: input})
 
 """#########################################################################
 Class: binRnnRBM - the RNNRBM model for stochastic binary inputs.
