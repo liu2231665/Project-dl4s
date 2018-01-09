@@ -18,20 +18,20 @@ Config.Opt = 'SGD'
 Config.unitType = 'GRU'
 Config.aisLevel = 100
 Config.aisRun = 100
-Config.dimRec = [500]
-Config.dimMlp = [400, 400]
+Config.dimRec = [200]
+Config.dimMlp = []
 Config.dimInput = 128
-Config.dimState = 250
+Config.dimState = 100
 Config.init_scale = 0.01
-Config.Gibbs = 1
+Config.Gibbs = 3
 Config.W_Norm = False
 Config.muTrain = True
 Config.alphaTrain = True
-Config.eventPath = './binCGRNN-f/'
-Config.savePath = './binCGRNN-f/'
-SAVETO = './binCGRNN-f/historyCGRNN-f.npz'
+Config.eventPath = './binCGRNN-f-200-3/'
+Config.savePath = './binCGRNN-f-200-3/'
+SAVETO = './binCGRNN-f-200-3/historyCGRNN-f.npz'
 
-Flag = 'evaluation'                       # {'training'/'evaluation'}
+Flag = 'training'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
     Dataset = fetchData()
@@ -46,7 +46,8 @@ if __name__ == '__main__':
         Config.savePath = os.path.join(Config.savePath, 'CGRNN-f')
         # Build the model and prepare the data-set.
         RnnRbm = binCGRNN(Config)
-        full_train(model=RnnRbm, dataset=Dataset, maxEpoch=300, batchSize=75, earlyStop=300, learning_rate=0.1,
+
+        full_train(model=RnnRbm, dataset=Dataset, maxEpoch=300, batchSize=75, earlyStop=10, learning_rate=0.1,
                           valid_batchSize=25, saveto=SAVETO)
 
     if Flag == 'evaluation':

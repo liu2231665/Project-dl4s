@@ -187,7 +187,7 @@ class binCGRNN(_CGRNN, object):
     #########################################################################"""
     def output_function(self, input):
         with self._graph.as_default():
-            return self._sess.run(self.Cell.RBM.muV, feed_dict={self.x: input})
+            return self._sess.run(self.muV, feed_dict={self.x: input})
 
     """#########################################################################
     gen_function: generate samples.
@@ -388,7 +388,7 @@ class gaussCGRNN(_CGRNN, object):
     #########################################################################"""
     def output_function(self, input):
         with self._graph.as_default():
-            return self._sess.run(self.Cell.RBM.muV, feed_dict={self.x: input})
+            return self._sess.run(self.muV, feed_dict={self.x: input})
 
     """#########################################################################
     ais_function: compute the approximated negative log-likelihood with partition
