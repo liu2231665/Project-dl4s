@@ -57,12 +57,7 @@ class CGCell(tf.contrib.rnn.RNNCell):
                                     config.init_scale)    # the hidden layer part of the recognition model.
             # system's parameter for the prior P(Z)= NN(Z{t-1}, d{t})
             initializer = tf.random_uniform_initializer(-self._init_scale, self._init_scale)
-            if self._mode == 'D':
-                dim = self._dimRec[-1]
-            elif self._mode == 'S':
-                dim = self._dimState
-            else:
-                dim = self._dimRec[-1] + self._dimState
+            dim = self._dimRec[-1]
             with tf.variable_scope('feedback', initializer=initializer):
                 #
                 self._W_bv = tf.get_variable('W_bv', shape=(dim, self._dimInput))
@@ -99,50 +94,38 @@ class CGCell(tf.contrib.rnn.RNNCell):
     """
     def __call__(self, x, state, scope=None):
         with tf.variable_scope('CGcell'):
-            Htm1 = state[0]
-            hidden = state[1]
-            rnnstate = state[2:]
+            hidden = state[0]
+            rnnstate = state[1:]
             if self._inputType == 'binary':
-                if self._mode == 'D':
-                    bvt = tf.tensordot(hidden, self._W_bv, [[-1], [0]]) + self._b_bv
-                    bht = tf.tensordot(hidden, self._W_bh, [[-1], [0]]) + self._b_bh
-                elif self._mode == 'S':
-                    bvt = tf.tensordot(Htm1, self._W_bv, [[-1], [0]]) + self._b_bv
-                    bht = tf.tensordot(Htm1, self._W_bh, [[-1], [0]]) + self._b_bh
-                else:
-                    bvt = tf.tensordot(tf.concat(axis=-1, values=(hidden, Htm1)), self._W_bv,
-                                         [[-1], [0]]) + self._b_bv
-                    bht = tf.tensordot(tf.concat(axis=-1, values=(hidden, Htm1)), self._W_bh,
-                                         [[-1], [0]]) + self._b_bh
+                bvt = tf.tensordot(hidden, self._W_bv, [[-1], [0]]) + self._b_bv
+                bht = tf.tensordot(hidden, self._W_bh, [[-1], [0]]) + self._b_bh
                 # run the RBM to generate necessary variable.
                 newV, newH, newS, muV, muH, muS = self.RBM(xt=x, bvt=bvt, bht=bht, k=self._gibbs)
-                hidden, newState = self.rnnCell(self.mlp(x), rnnstate)
+                if self._mode == 'D':
+                    hidden, newState = self.rnnCell(self.mlp(x), rnnstate)
+                elif self._mode == 'S':
+                    hidden, newState = self.rnnCell(newH, rnnstate)
+                else:
+                    xx = tf.concat([self.mlp(x), newH], axis=1)
+                    hidden, newState = self.rnnCell(tf.concat([self.mlp(x), newS*newH], axis=1), rnnstate)
                 return (newV, newH, newS, muV, muH, muS, bvt, bht), \
-                       (newH, hidden) + newState
+                       (hidden,) + newState
 
             elif self._inputType == 'continuous':
-                if self._mode == 'D':
-                    bvt = tf.tensordot(hidden, self._W_bv, [[-1], [0]]) + self._b_bv
-                    bht = tf.tensordot(hidden, self._W_bh, [[-1], [0]]) + self._b_bh
-                    gammat = tf.nn.softplus(tf.tensordot(
-                        hidden, self._W_gamma, [[-1], [0]]) + self._b_gamma)
-                elif self._mode == 'S':
-                    bvt = tf.tensordot(Htm1, self._W_bv, [[-1], [0]]) + self._b_bv
-                    bht = tf.tensordot(Htm1, self._W_bh, [[-1], [0]]) + self._b_bh
-                    gammat = tf.nn.softplus(tf.tensordot(
-                        Htm1, self._W_gamma, [[-1], [0]]) + self._b_gamma)
-                else:
-                    bvt = tf.tensordot(tf.concat(axis=-1, values=(hidden, Htm1)), self._W_bv,
-                                         [[-1], [0]]) + self._b_bv
-                    bht = tf.tensordot(tf.concat(axis=-1, values=(hidden, Htm1)), self._W_bh,
-                                         [[-1], [0]]) + self._b_bh
-                    gammat = tf.nn.softplus(tf.tensordot(tf.concat(axis=-1, values=(hidden, Htm1)), self._W_gamma,
-                                         [[-1], [0]]) + self._b_gamma)
+                bvt = tf.tensordot(hidden, self._W_bv, [[-1], [0]]) + self._b_bv
+                bht = tf.tensordot(hidden, self._W_bh, [[-1], [0]]) + self._b_bh
+                gammat = tf.nn.softplus(tf.tensordot(
+                    hidden, self._W_gamma, [[-1], [0]]) + self._b_gamma)
                 # run the RBM to generate necessary variable.
                 newV, newH, newS, muV, muH, muS = self.RBM(xt=x, bvt=bvt, bht=bht, gammat=gammat, k=self._gibbs)
-                hidden, newState = self.rnnCell(self.mlp(x), rnnstate)
+                if self._mode == 'D':
+                    hidden, newState = self.rnnCell(self.mlp(x), rnnstate)
+                elif self._mode == 'S':
+                    hidden, newState = self.rnnCell(newH, rnnstate)
+                else:
+                    hidden, newState = self.rnnCell(tf.concat([self.mlp(x), newS*newH], axis=1), rnnstate)
                 return (newV, newH, newS, muV, muH, muS, bvt, bht, gammat), \
-                       (newH, hidden) + newState
+                       (hidden,) + newState
             else:
                 raise ValueError("The input type should be either binary or continuous!!")
 
@@ -154,9 +137,9 @@ class CGCell(tf.contrib.rnn.RNNCell):
     """
     def zero_state(self, batch_size, dtype):
         state0 = self.rnnCell.zero_state(batch_size, dtype)
-        H0 = tf.zeros(shape=(batch_size, self._dimState))
+        #H0 = tf.zeros(shape=(batch_size, self._dimState))
         hidden0 = tf.zeros(shape=(batch_size, self._dimRec[-1]))
-        return (H0, hidden0) + state0
+        return (hidden0,) + state0
 
     @property
     def state_size(self):

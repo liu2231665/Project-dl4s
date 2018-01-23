@@ -18,20 +18,21 @@ Config.Opt = 'Adam'
 Config.unitType = 'GRU'
 Config.aisLevel = 100
 Config.aisRun = 100
-Config.dimRec = [200]
-Config.dimMlp = []
+Config.dimRec = [500]
+Config.dimMlp = [400, 400]
 Config.dimInput = 150
-Config.dimState = 75
+Config.dimState = 250
 Config.init_scale = 0.01
 Config.Gibbs = 1
 Config.W_Norm = True
 Config.muTrain = True
 Config.alphaTrain = True
-Config.eventPath = './audioCGRNN-f-5/'
-Config.savePath = './audioCGRNN-f-5/'
-SAVETO = './audioCGRNN-f-5/historyCGRNN-f.npz'
+Config.phiTrain = False
+Config.eventPath = './audioCGRNN-f-new2/'
+Config.savePath = './audioCGRNN-f-new2/'
+SAVETO = './audioCGRNN-f-new2/historyCGRNN-f.npz'
 
-Flag = 'training'                       # {'training'/'evaluation'}
+Flag = 'evaluation'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
     Dataset = fetchData()
@@ -46,7 +47,7 @@ if __name__ == '__main__':
         Config.savePath = os.path.join(Config.savePath, 'CGRNN-f')
         # Build the model and prepare the data-set.
         RnnRbm = gaussCGRNN(Config)
-        full_train(model=RnnRbm, dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=300, learning_rate=0.0005,
+        full_train(model=RnnRbm, dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=20, learning_rate=0.0005,
                           valid_batchSize=75, saveto=SAVETO)
 
     if Flag == 'evaluation':
@@ -68,9 +69,9 @@ if __name__ == '__main__':
         configSRNN.loadPath = configSRNN.savePath
         SRNN = gaussSRNN(configSRNN)
         #
-        Config.loadPath = os.path.join(Config.savePath, 'CGRNN-s')
+        Config.loadPath = os.path.join(Config.savePath, 'CGRNN-f')
         RnnRbm = gaussCGRNN(Config, VAE=SRNN)
         print('Evaluation: start computing the accuracy metric.')
-        ACC, NLL = rmseGaussRNNRBM(RnnRbm, Dataset['test'], batchSize=25)
+        ACC, NLL = rmseGaussRNNRBM(RnnRbm, Dataset['test'], batchSize=50)
         print('The testing transcription accuracy is \x1b[1;91m%10.4f\x1b[0m.' % ACC)
         print('The testing transcription NLL is \x1b[1;91m%10.4f\x1b[0m.' % NLL)

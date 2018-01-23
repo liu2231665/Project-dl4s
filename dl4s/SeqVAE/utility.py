@@ -372,7 +372,7 @@ class varCell(tf.contrib.rnn.RNNCell):
             else:
                 temp += self._dimState
         return (self._dimState, self._dimState, self._dimState, self._dimState,
-                temp, self._dimRec[-1])
+                temp, self._dimRec[-1], self._dimState)
 
     """
     setGen: setting the generative models.
