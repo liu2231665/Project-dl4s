@@ -169,9 +169,13 @@ class binSRNN(_SRNN, object):
     input: input - .
     output: should be the reconstruction represented by the probability.
     #########################################################################"""
-    def output_function(self, input):
+    def output_function(self, input, samples=True):
         with self._graph.as_default():
-            return self._sess.run(self._dec, feed_dict={self.x: input})
+            if samples:
+                return self._sess.run(tf.distributions.Bernoulli(probs=self._dec, dtype=tf.float32).sample(),
+                                      feed_dict={self.x: input})
+            else:
+                return self._sess.run(self._dec, feed_dict={self.x: input})
 
 """#########################################################################
 Class: gaussSRNN - the SRNN model for stochastic continuous inputs.

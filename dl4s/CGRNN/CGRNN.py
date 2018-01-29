@@ -174,11 +174,11 @@ class binCGRNN(_CGRNN, object):
         with self._graph.as_default():
             k = gibbs if gibbs is not None else self._gibbs
             if k == self._gibbs:
-                return self._sess.run(self.muH, feed_dict={self.x: newV})
+                return self._sess.run(self.muH * self.muS, feed_dict={self.x: newV})
             else:
                 for i in range(k - 1):
                     newV = self._sess.run(self.Cell.RBM.newV0, feed_dict={self.x: newV})
-                return self._sess.run(self.Cell.RBM.muH0, feed_dict={self.x: newV})
+                return self._sess.run(self.Cell.RBM.muH0 * self.Cell.RBM.muS0, feed_dict={self.x: newV})
 
     """#########################################################################
     output_function: return the conditional mean of the visible layer.
@@ -197,8 +197,8 @@ class binCGRNN(_CGRNN, object):
     #########################################################################"""
     def gen_function(self, x=None, numSteps=None, gibbs=None):
         # update the RBM's bias with bvt & bht.
-        self.Cell.RBM._bh = self.bht
-        self.Cell.RBM._bv = self.bvt
+        #self.Cell.RBM._bh = self.bht
+        #self.Cell.RBM._bv = self.bvt
         #
         newV = x
         with self._graph.as_default():
@@ -214,7 +214,7 @@ class binCGRNN(_CGRNN, object):
                 newV = self._sess.run(self.newV, feed_dict={self.x: newV})
             else:
                 for i in range(k):
-                    newV = self._sess.run(self.Cell.RBM.newV0, feed_dict={self.x: newV})
+                    newV = self._sess.run(self.newV, feed_dict={self.x: newV})
         return newV if x is not None else newV[0]
 
     """#########################################################################
@@ -347,11 +347,11 @@ class gaussCGRNN(_CGRNN, object):
         with self._graph.as_default():
             k = gibbs if gibbs is not None else self._gibbs
             if k == self._gibbs:
-                return self._sess.run(self.muH, feed_dict={self.x: newV})
+                return self._sess.run(self.muH * self.muS, feed_dict={self.x: newV})
             else:
                 for i in range(k - 1):
                     newV = self._sess.run(self.Cell.RBM.newV0, feed_dict={self.x: newV})
-                return self._sess.run(self.Cell.RBM.muH0, feed_dict={self.x: newV})
+                return self._sess.run(self.Cell.RBM.muH0 * self.Cell.RBM.muS0, feed_dict={self.x: newV})
 
     """#########################################################################
     gen_function: generate samples.
@@ -388,7 +388,7 @@ class gaussCGRNN(_CGRNN, object):
     #########################################################################"""
     def output_function(self, input):
         with self._graph.as_default():
-            return self._sess.run(self.newV, feed_dict={self.x: input})
+            return self._sess.run(self.muV, feed_dict={self.x: input})
 
     """#########################################################################
     ais_function: compute the approximated negative log-likelihood with partition

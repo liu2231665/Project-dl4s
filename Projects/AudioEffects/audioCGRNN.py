@@ -28,11 +28,11 @@ Config.W_Norm = True
 Config.muTrain = True
 Config.alphaTrain = True
 Config.phiTrain = False
-Config.eventPath = './audioCGRNN-f-new2/'
-Config.savePath = './audioCGRNN-f-new2/'
-SAVETO = './audioCGRNN-f-new2/historyCGRNN-f.npz'
+Config.eventPath = './audioCGRNN-f-temp/'
+Config.savePath = './audioCGRNN-f-temp/'
+SAVETO = './audioCGRNN-f-temp/historyCGRNN-f.npz'
 
-Flag = 'evaluation'                       # {'training'/'evaluation'}
+Flag = 'training'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
     Dataset = fetchData()
@@ -69,7 +69,7 @@ if __name__ == '__main__':
         configSRNN.loadPath = configSRNN.savePath
         SRNN = gaussSRNN(configSRNN)
         #
-        Config.loadPath = os.path.join(Config.savePath, 'CGRNN-f')
+        Config.loadPath = os.path.join(Config.savePath, 'CGRNN-d')
         RnnRbm = gaussCGRNN(Config, VAE=SRNN)
         print('Evaluation: start computing the accuracy metric.')
         ACC, NLL = rmseGaussRNNRBM(RnnRbm, Dataset['test'], batchSize=50)

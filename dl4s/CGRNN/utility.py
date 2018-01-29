@@ -104,9 +104,8 @@ class CGCell(tf.contrib.rnn.RNNCell):
                 if self._mode == 'D':
                     hidden, newState = self.rnnCell(self.mlp(x), rnnstate)
                 elif self._mode == 'S':
-                    hidden, newState = self.rnnCell(newH, rnnstate)
+                    hidden, newState = self.rnnCell(newS*newH, rnnstate)
                 else:
-                    xx = tf.concat([self.mlp(x), newH], axis=1)
                     hidden, newState = self.rnnCell(tf.concat([self.mlp(x), newS*newH], axis=1), rnnstate)
                 return (newV, newH, newS, muV, muH, muS, bvt, bht), \
                        (hidden,) + newState
@@ -121,7 +120,7 @@ class CGCell(tf.contrib.rnn.RNNCell):
                 if self._mode == 'D':
                     hidden, newState = self.rnnCell(self.mlp(x), rnnstate)
                 elif self._mode == 'S':
-                    hidden, newState = self.rnnCell(newH, rnnstate)
+                    hidden, newState = self.rnnCell(newS*newH, rnnstate)
                 else:
                     hidden, newState = self.rnnCell(tf.concat([self.mlp(x), newS*newH], axis=1), rnnstate)
                 return (newV, newH, newS, muV, muH, muS, bvt, bht, gammat), \

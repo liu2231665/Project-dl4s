@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 # CGRNN
 configCGRNN.mode = 'full'
 configCGRNN.Opt = 'SGD'
-configCGRNN.unitType = 'GRU'
+configCGRNN.recType = 'GRU'
 configCGRNN.aisLevel = 100
 configCGRNN.aisRun = 100
 configCGRNN.dimRec = [500]
@@ -27,8 +27,8 @@ configCGRNN.Gibbs = 1
 configCGRNN.W_Norm = False
 configCGRNN.muTrain = True
 configCGRNN.alphaTrain = True
-configCGRNN.eventPath = './binCGRNN-f-new/'
-configCGRNN.savePath = './binCGRNN-f-new/'
+configCGRNN.eventPath = './binCGRNN-f-new2/'
+configCGRNN.savePath = './binCGRNN-f-new2/'
 configCGRNN.loadPath = os.path.join(configCGRNN.savePath, 'CGRNN-f')
 CGRNN = binCGRNN(configCGRNN)
 
@@ -93,14 +93,31 @@ for i in range(len(testSet)):
     hiddenCGRNN = CGRNN.hidden_function(x)
     hiddenSRNN = SRNN.encoder(x)[0]
     hiddenVRNN = VRNN.encoder(x)[0]
-    hiddenssRNNRBM = ssRnnRbm.hidden_function(x)
+    hiddenssRNNRBM = ssRnnRbm.sparse_hidden_function(x)
     # vis.
-    plt.figure(1)
-    plt.imshow(hiddenCGRNN[0].T, cmap='jet')
-    plt.figure(2)
-    plt.imshow(hiddenSRNN[0].T, cmap='jet')
-    plt.figure(3)
-    plt.imshow(hiddenVRNN[0].T, cmap='jet')
-    plt.figure(4)
-    plt.imshow(hiddenssRNNRBM[0].T, cmap='jet')
+    plt.close('all')
+    f, (ax1, ax2, ax3, ax4) = plt.subplots(4, sharex=True)
+    ax1.imshow(hiddenCGRNN[0].T, cmap='bwr')
+    ax1.axes.get_xaxis().set_visible(False)
+    ax1.axes.get_yaxis().set_visible(False)
+    #ax1.axis('off')
+    ax1.set_title('Lakh Midi')
+
+
+    ax2.imshow(hiddenSRNN[0].T, cmap='bwr')
+    ax2.axes.get_xaxis().set_visible(False)
+    ax2.axes.get_yaxis().set_visible(False)
+    #ax2.set_title('hiddenSRNN')
+    #ax2.axis('off')
+    ax3.imshow(hiddenVRNN[0].T, cmap='bwr')
+    ax3.axes.get_xaxis().set_visible(False)
+    ax3.axes.get_yaxis().set_visible(False)
+    #ax3.set_title('hiddenVRNN')
+    #ax3.axis('off')
+    cax = ax4.imshow(hiddenssRNNRBM[0].T, cmap='bwr')
+    ax4.axes.get_xaxis().set_visible(False)
+    ax4.axes.get_yaxis().set_visible(False)
+    #ax4.set_title('hiddenssRNNRBM')
+    #ax4.axis('off')
+    f.subplots_adjust(hspace=0.05)
     plt.show()

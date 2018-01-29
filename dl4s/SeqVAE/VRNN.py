@@ -171,7 +171,7 @@ class binVRNN(_VRNN, object):
                 bdec = tf.get_variable('bdec')
 
             for i in range(numSteps):
-                (_, _, _, _, hidde_, _), state = self._varCell(x_, state)
+                (_, _, _, _, hidde_, _, _), state = self._varCell(x_, state)
                 probs = tf.nn.sigmoid(tf.nn.xw_plus_b(hidde_, Wdec, bdec))
                 x_ = tf.distributions.Bernoulli(probs=probs, dtype=tf.float32).sample()
                 samples.append(x_)
@@ -183,8 +183,13 @@ class binVRNN(_VRNN, object):
     input: input - .
     output: should be the reconstruction represented by the probability.
     #########################################################################"""
-    def output_function(self, input):
-            return self._sess.run(self._dec, feed_dict={self.x: input})
+    def output_function(self, input, samples=True):
+        with self._graph.as_default():
+            if samples:
+                return self._sess.run(tf.distributions.Bernoulli(probs=self._dec, dtype=tf.float32).sample(),
+                                      feed_dict={self.x: input})
+            else:
+                return self._sess.run(self._dec, feed_dict={self.x: input})
 
 """#########################################################################
 Class: gaussVRNN - the VRNN model for stochastic continuous inputs.
@@ -238,7 +243,7 @@ class gaussVRNN(_VRNN, object):
                 bdec_sig = tf.get_variable('bdec_sig')
 
             for i in range(numSteps):
-                (_, _, _, _, hidde_, _), state = self._varCell(x_, state)
+                (_, _, _, _, hidde_, _, _), state = self._varCell(x_, state)
                 mu = tf.tensordot(hidde_, Wdec_mu, [[-1], [0]]) + bdec_mu
                 std = tf.nn.softplus(tf.tensordot(hidde_, Wdec_sig, [[-1], [0]]) + bdec_sig) + 1e-8
                 x_ = tf.distributions.Normal(loc=mu, scale=std).sample()
