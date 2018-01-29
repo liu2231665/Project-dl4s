@@ -130,7 +130,7 @@ class _VRNN(object):
         return mean, var
 
 """#########################################################################
-Class: binSTORN - the VRNN model for stochastic binary inputs.
+Class: binVRNN - the VRNN model for stochastic binary inputs.
 #########################################################################"""
 class binVRNN(_VRNN, object):
     """#########################################################################
@@ -256,6 +256,11 @@ class gaussVRNN(_VRNN, object):
     input: input - .
     output: should be the reconstruction represented by the probability.
     #########################################################################"""
-    def output_function(self, input):
-        mean, std = self._sess.run(self._dec, feed_dict={self.x: input})
-        return mean, std
+    def output_function(self, input, samples=True):
+        with self._graph.as_default():
+            if samples:
+                return self._sess.run(tf.distributions.Normal(loc=self._dec[0], scale=self._dec[1]).sample(),
+                                      feed_dict={self.x: input})
+            else:
+                mean, std = self._sess.run(self._dec, feed_dict={self.x: input})
+                return mean, std

@@ -90,20 +90,50 @@ CGRNN_FOLDER = "Samples/CGRNN/"
 SRNN_FOLDER = "Samples/SRNN/"
 VRNN_FOLDER = "Samples/VRNN/"
 ssRnnRbm_FOLDER = "Samples/ssRnnRbm/"
+Ground_FOLDER = "Samples/"
+# Check whether the target path exists.
+if not os.path.exists(Ground_FOLDER):
+    os.makedirs(Ground_FOLDER)
+if not os.path.exists(CGRNN_FOLDER):
+    os.makedirs(CGRNN_FOLDER)
+if not os.path.exists(SRNN_FOLDER):
+    os.makedirs(SRNN_FOLDER)
+if not os.path.exists(VRNN_FOLDER):
+    os.makedirs(VRNN_FOLDER)
+if not os.path.exists(ssRnnRbm_FOLDER):
+    os.makedirs(ssRnnRbm_FOLDER)
 
 #
 # dataset.
 Dataset = fetchData()
 testSet = Dataset['test']
-for i in range(20):
-    CGRNN_sample = CGRNN.gen_function(testSet[i: i+2])
-    SRNN_sample = SRNN.gen_function(100)
-    VRNN_sample = VRNN.gen_function(100)
-    ssRnnRbm_sample = ssRnnRbm.gen_function(testSet[i: i+2])
+for i in range(10):
+    print('The ' + str(i) + '-th graph.')
+    CGRNN_sample = CGRNN.gen_function(x=testSet[i: i + 2])
+    SRNN_sample = SRNN.output_function(input=testSet[i: i + 2])
+    VRNN_sample = VRNN.output_function(input=testSet[i: i + 2])
+    ssRnnRbm_sample = ssRnnRbm.gen_function(x=testSet[i: i + 2])
+    # reshape them.
+    length = np.shape(CGRNN_sample[0])
+    length = length[0] * length[1]
+    ground = testSet[i].reshape(shape=(length, ))
+    CGRNN_sample = CGRNN_sample[0].reshape(shape=(length, ))
+    SRNN_sample = SRNN_sample[0].reshape(shape=(length,))
+    VRNN_sample = VRNN_sample[0].reshape(shape=(length,))
+    ssRnnRbm_sample = ssRnnRbm_sample[0].reshape(shape=(length,))
     plt.figure(1)
-    plt.imshow(testSet[i].T, cmap='hot')
+    plt.plot(ground)
+    plt.savefig(Ground_FOLDER + 'Ground-True-' + str(i) + '.eps')
     plt.figure(2)
-    plt.imshow(CGRNN_sample[0].T, cmap='hot')
+    plt.plot(CGRNN_sample)
+    plt.savefig(CGRNN_FOLDER + 'CGRNN-' + str(i) + '.eps')
     plt.figure(3)
-    plt.imshow(VRNN_sample.T, cmap='hot')
-    plt.show()
+    plt.plot(SRNN_sample)
+    plt.savefig(SRNN_FOLDER + 'SRNN-' + str(i) + '.eps')
+    plt.figure(4)
+    plt.plot(VRNN_sample)
+    plt.savefig(VRNN_FOLDER + 'VRNN-' + str(i) + '.eps')
+    plt.figure(5)
+    plt.plot(ssRnnRbm_sample)
+    plt.savefig(ssRnnRbm_FOLDER + 'ssRnnRbm-' + str(i) + '.eps')
+    plt.close()

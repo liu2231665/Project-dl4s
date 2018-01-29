@@ -50,7 +50,6 @@ if __name__ == '__main__':
 
         full_train(model=RnnRbm, dataset=Dataset, maxEpoch=240, batchSize=75, earlyStop=10, learning_rate=0.1,
                           valid_batchSize=75, saveto=SAVETO)
-
     if Flag == 'evaluation':
         # REFERENCE MODEL.
         configSRNN.Opt = 'SGD'
