@@ -90,9 +90,11 @@ class CGCell(tf.contrib.rnn.RNNCell):
     input: x - the current input with size (batch, frame).
            state - the previous state of the cells. [newH, hidden, rnnstate]
            scope - indicate the variable scope.
+           generative - indicate whether the cell is used for generating samples.
     output: 
     """
-    def __call__(self, x, state, scope=None):
+    def __call__(self, x, state, scope=None, generative=False, gibbs=None):
+        k = gibbs if gibbs is not None else self._gibbs
         with tf.variable_scope('CGcell'):
             hidden = state[0]
             rnnstate = state[1:]
@@ -100,13 +102,14 @@ class CGCell(tf.contrib.rnn.RNNCell):
                 bvt = tf.tensordot(hidden, self._W_bv, [[-1], [0]]) + self._b_bv
                 bht = tf.tensordot(hidden, self._W_bh, [[-1], [0]]) + self._b_bh
                 # run the RBM to generate necessary variable.
-                newV, newH, newS, muV, muH, muS = self.RBM(xt=x, bvt=bvt, bht=bht, k=self._gibbs)
+                newV, newH, newS, muV, muH, muS = self.RBM(xt=x, bvt=bvt, bht=bht, k=k)
+                xx = newV if generative else x
                 if self._mode == 'D':
-                    hidden, newState = self.rnnCell(self.mlp(x), rnnstate)
+                    hidden, newState = self.rnnCell(self.mlp(xx), rnnstate)
                 elif self._mode == 'S':
                     hidden, newState = self.rnnCell(newS*newH, rnnstate)
                 else:
-                    hidden, newState = self.rnnCell(tf.concat([self.mlp(x), newS*newH], axis=1), rnnstate)
+                    hidden, newState = self.rnnCell(tf.concat([self.mlp(xx), newS*newH], axis=1), rnnstate)
                 return (newV, newH, newS, muV, muH, muS, bvt, bht), \
                        (hidden,) + newState
 
@@ -116,13 +119,14 @@ class CGCell(tf.contrib.rnn.RNNCell):
                 gammat = tf.nn.softplus(tf.tensordot(
                     hidden, self._W_gamma, [[-1], [0]]) + self._b_gamma)
                 # run the RBM to generate necessary variable.
-                newV, newH, newS, muV, muH, muS = self.RBM(xt=x, bvt=bvt, bht=bht, gammat=gammat, k=self._gibbs)
+                newV, newH, newS, muV, muH, muS = self.RBM(xt=x, bvt=bvt, bht=bht, gammat=gammat, k=k)
+                xx = newV if generative else x
                 if self._mode == 'D':
-                    hidden, newState = self.rnnCell(self.mlp(x), rnnstate)
+                    hidden, newState = self.rnnCell(self.mlp(xx), rnnstate)
                 elif self._mode == 'S':
                     hidden, newState = self.rnnCell(newS*newH, rnnstate)
                 else:
-                    hidden, newState = self.rnnCell(tf.concat([self.mlp(x), newS*newH], axis=1), rnnstate)
+                    hidden, newState = self.rnnCell(tf.concat([self.mlp(xx), newS*newH], axis=1), rnnstate)
                 return (newV, newH, newS, muV, muH, muS, bvt, bht, gammat), \
                        (hidden,) + newState
             else:

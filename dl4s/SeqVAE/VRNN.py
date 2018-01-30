@@ -181,7 +181,9 @@ class binVRNN(_VRNN, object):
     """#########################################################################
     output_function: reconstruction function.
     input: input - .
-    output: should be the reconstruction represented by the probability.
+           samples - indicate wether outputs a sample.
+    output: should be the reconstruction represented by the probability or the
+            sample.
     #########################################################################"""
     def output_function(self, input, samples=True):
         with self._graph.as_default():
@@ -254,7 +256,9 @@ class gaussVRNN(_VRNN, object):
     """#########################################################################
     output_function: reconstruction function.
     input: input - .
-    output: should be the reconstruction represented by the probability.
+           samples - indicate wether outputs a sample.
+    output: should be the reconstruction represented by the probability or the
+            sample.
     #########################################################################"""
     def output_function(self, input, samples=True):
         with self._graph.as_default():

@@ -8,9 +8,8 @@ Descriptions: This file contains the Autoregressive RNN with arbitrary
 
 import tensorflow as tf
 from .utility import hidden_net
-from dl4s.tools import get_batches_idx, GaussNLL
+from dl4s.tools import GaussNLL
 import numpy as np
-import time
 
 """#########################################################################
 Class: arRNN - the hyper abstraction of the auto-regressive RNN.

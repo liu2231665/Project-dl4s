@@ -111,3 +111,8 @@ binVRNN/
 checkpoint
 *.npz
 *.data-00000-of-00001
+*.mp3
+*.npy
+*.eps
+*.wav
+*.mid

@@ -196,26 +196,31 @@ class binCGRNN(_CGRNN, object):
     output: should be the sample.
     #########################################################################"""
     def gen_function(self, x=None, numSteps=None, gibbs=None):
-        # update the RBM's bias with bvt & bht.
-        #self.Cell.RBM._bh = self.bht
-        #self.Cell.RBM._bv = self.bvt
-        #
         newV = x
         with self._graph.as_default():
             if x is not None:
-                sample = x
+                newV = x
+                k = gibbs if gibbs is not None else self._gibbs
+                if k == self._gibbs:
+                    newV = self._sess.run(self.newV, feed_dict={self.x: newV})
+                else:
+                    for i in range(k):
+                        newV = self._sess.run(self.newV, feed_dict={self.x: newV})
+                #
             elif numSteps is not None:
-                sample = np.zeros(shape=(1, numSteps, self._dimInput))
+                state = self.Cell.zero_state(1, dtype=tf.float32)
+                newV = []
+                for i in range(numSteps):
+                    x_ = tf.zeros((1, self._dimInput), dtype='float32')
+                    (x_, _, _, _, _, _, _, _), state = self.Cell(x_, state, generative=True, gibbs=gibbs)
+                    newV.append(x_)
+                newV = tf.concat(newV, 0)
+                newV = self._sess.run(newV)
+                #
             else:
                 raise ValueError("Neither input or numSteps is provided!!")
-            newV = sample
-            k = gibbs if gibbs is not None else self._gibbs
-            if k == self._gibbs:
-                newV = self._sess.run(self.newV, feed_dict={self.x: newV})
-            else:
-                for i in range(k):
-                    newV = self._sess.run(self.newV, feed_dict={self.x: newV})
-        return newV if x is not None else newV[0]
+
+        return newV if x is None else newV[0]
 
     """#########################################################################
     _NVIL_VAE: generate the graph to compute the NVIL upper bound of log Partition
@@ -315,6 +320,15 @@ class gaussCGRNN(_CGRNN, object):
             self._monitor = tf.sqrt(tf.reduce_mean(monitor))
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(self._loss)
+            # add the computation of precision and covariance matrix of ssRBM.
+            newH = tf.expand_dims(self.newH, axis=2)
+            W = tf.expand_dims(tf.expand_dims(self.Cell.RBM._W, axis=0), axis=0)
+            term1 = newH * W / (self.Cell.RBM._alpha + 1e-8)
+            term1 = tf.tensordot(term1, self.Cell.RBM._W, [[-1], [-1]])
+            Cv_sh = 1 / (self.Cell.RBM._gamma + tf.tensordot(newH, self.Cell.RBM._phi, [[-1], [0]]) + 1e-8)
+            term2 = Cv_sh * tf.eye(self._dimInput, batch_shape=[1, 1])
+            self.PreV_h = term2 + term1
+            self.CovV_h = tf.matrix_inverse(self.PreV_h)
             #
             if VAE is None:
                 self._logZ = self.Cell.RBM.AIS(self._aisRun, self._aisLevel,
@@ -360,26 +374,32 @@ class gaussCGRNN(_CGRNN, object):
     output: should be the sample.
     #########################################################################"""
     def gen_function(self, x=None, numSteps=None, gibbs=None):
-        # update the RBM's bias with bvt & bht.
-        self.Cell.RBM._bh = self.bht
-        self.Cell.RBM._bv = self.bvt
         #
         newV = x
         with self._graph.as_default():
             if x is not None:
-                sample = x
+                newV = x
+                k = gibbs if gibbs is not None else self._gibbs
+                if k == self._gibbs:
+                    newV = self._sess.run(self.newV, feed_dict={self.x: newV})
+                else:
+                    for i in range(k):
+                        newV = self._sess.run(self.newV, feed_dict={self.x: newV})
+                        #
             elif numSteps is not None:
-                sample = np.zeros(shape=(1, numSteps, self._dimInput))
+                state = self.Cell.zero_state(1, dtype=tf.float32)
+                newV = []
+                for i in range(numSteps):
+                    x_ = tf.zeros((1, self._dimInput), dtype='float32')
+                    (x_, _, _, _, _, _, _, _, _), state = self.Cell(x_, state, generative=True, gibbs=gibbs)
+                    newV.append(x_)
+                newV = tf.concat(newV, 0)
+                newV = self._sess.run(newV)
+                #
             else:
                 raise ValueError("Neither input or numSteps is provided!!")
-            newV = sample
-            k = gibbs if gibbs is not None else self._gibbs
-            if k == self._gibbs:
-                newV = self._sess.run(self.newV, feed_dict={self.x: newV})
-            else:
-                for i in range(k):
-                    newV = self._sess.run(self.Cell.RBM.newV0, feed_dict={self.x: newV})
-        return newV if x is not None else newV[0]
+
+        return newV if x is None else newV[0]
 
     """#########################################################################
     output_function: return the conditional mean of the visible layer.
@@ -449,3 +469,21 @@ class gaussCGRNN(_CGRNN, object):
         logPx_Z = tf.reduce_sum(Px_Z.log_prob(X), axis=[-1])
         logPz = tf.reduce_sum(Pz.log_prob(VAE._Z), axis=[-1])
         return X, logPz_X, logPx_Z, logPz, VAE.x
+
+    """#########################################################################
+    cov_function: compute the covariance matrix Cv_h.
+    input: input - numerical input.
+    output:  covariance matrix Cv_h.
+    #########################################################################"""
+    def cov_function(self, input):
+        with self._graph.as_default():
+            return self._sess.run(self.CovV_h, feed_dict={self.x: input})
+
+    """#########################################################################
+    pre_function: compute the precision matrix Cv_h^{-1}.
+    input: input - numerical input.
+    output:  precision matrix Cv_h^{-1}.
+    #########################################################################"""
+    def pre_function(self, input):
+        with self._graph.as_default():
+            return self._sess.run(self.PreV_h, feed_dict={self.x: input})

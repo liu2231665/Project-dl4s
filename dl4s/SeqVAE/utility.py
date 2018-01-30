@@ -421,7 +421,10 @@ class varCell(tf.contrib.rnn.RNNCell):
             zz = self._mlpz(z)
             hidden_dec = self._mlpDec(tf.concat(axis=1, values=(zz, h_tm1)))
         # Unpdate the state.
-        _, newState = self._rnn(tf.concat(axis=1, values=(xx, zz)), state)
+        if self._train:
+            _, newState = self._rnn(tf.concat(axis=1, values=(xx, zz)), state)
+        else:
+            _, newState = self._rnn(tf.concat(axis=1, values=(xx, zz)), state)
         return (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1, z), newState
 
     """

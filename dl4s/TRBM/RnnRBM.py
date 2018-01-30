@@ -45,6 +45,7 @@ class _RnnRBM(object):
             self._dimInput = config.dimInput
             # <scalar> the size of frame of the state.
             self._dimState = config.dimState
+            self._dimRec = config.dimRec
             # <string/None> path to save the model.
             self._savePath = config.savePath
             # <string/None> path to save the events.
@@ -482,6 +483,8 @@ class ssRNNRBM(_RnnRBM, object):
         with self._graph.as_default():
             return self._sess.run(self.PreV_h, feed_dict={self.x: input})
 
+
+
     """#########################################################################
     sparse_hidden_function: generate the sparse hidden activation of given X
                       represented by E(H*S|V).
@@ -497,7 +500,6 @@ class ssRNNRBM(_RnnRBM, object):
                 newV = self._sess.run(self._rbm.newV0, feed_dict={self.x: newV})
         meanH, meanS = self._sess.run([self._rbm.muH0, self._rbm.muS0], feed_dict={self.x: newV})
         return meanH * meanS
-
 
 
     """#########################################################################
@@ -557,6 +559,47 @@ class ssRNNRBM(_RnnRBM, object):
                 FEofInput = self._sess.run(self.FEofInput, feed_dict={self.x: input})
                 loss_value = np.mean(FEofInput + logZ)
         return loss_value
+
+    """#########################################################################
+    gen_function: generate samples.
+    input: numSteps - the length of the sample sequence.
+           gibbs - the number of gibbs sampling.
+    output: should be the sample.
+    #########################################################################"""
+    def gen_function(self, x=None, numSteps=None, gibbs=None):
+        newV = x
+        with self._graph.as_default():
+            if x is not None:
+                newV = x
+                k = gibbs if gibbs is not None else self._gibbs
+                if k == self._gibbs:
+                    newV = self._sess.run(self._rbm.newV, feed_dict={self.x: newV})
+                else:
+                    for i in range(k):
+                        newV = self._sess.run(self._rbm.newV, feed_dict={self.x: newV})
+                        #
+            elif numSteps is not None:
+                state = self._rnnCell.zero_state(1, dtype=tf.float32)
+                k = gibbs if gibbs is not None else self._gibbs
+                newV = []
+                for i in range(numSteps):
+                    dt = tf.zeros((1, self._dimRec[-1]), dtype='float32')
+                    with tf.variable_scope("ssRBM", reuse=True):
+                        # in ssRNNRBM, the feedback influences only the bias of H.
+                        x_ = tf.zeros((1, self._dimInput), dtype='float32')
+                        bh = tf.get_variable('bh')
+                        Wdh = tf.get_variable('Wdh')
+                        bht = tf.tensordot(dt, Wdh, [[-1], [0]]) + bh
+                        self._rbm._bh = bht
+                        (x_, _, _, _, _, _) = self._rbm.GibbsSampling(V=x_, k=k)
+                        dt, state = self._rnnCell(self._mlp(x_), state)
+                    newV.append(x_)
+                newV = tf.concat(newV, 0)
+                newV = self._sess.run(newV)
+                #
+            else:
+                raise ValueError("Neither input or numSteps is provided!!")
+        return newV if x is None else newV[0]
 
 """#########################################################################
 Class: binssRNNRBM - the RNNRBM model for stochastic binary inputs
@@ -713,3 +756,44 @@ class binssRNNRBM(_RnnRBM, object):
             with self._graph.as_default():
                 loss_value = self._sess.run(self._monitor, feed_dict={self.x: input})
             return loss_value
+
+    """#########################################################################
+    gen_function: generate samples.
+    input: numSteps - the length of the sample sequence.
+           gibbs - the number of gibbs sampling.
+    output: should be the sample.
+    #########################################################################"""
+    def gen_function(self, x=None, numSteps=None, gibbs=None):
+        newV = x
+        with self._graph.as_default():
+            if x is not None:
+                newV = x
+                k = gibbs if gibbs is not None else self._gibbs
+                if k == self._gibbs:
+                    newV = self._sess.run(self._rbm.newV, feed_dict={self.x: newV})
+                else:
+                    for i in range(k):
+                        newV = self._sess.run(self._rbm.newV, feed_dict={self.x: newV})
+                        #
+            elif numSteps is not None:
+                state = self._rnnCell.zero_state(1, dtype=tf.float32)
+                k = gibbs if gibbs is not None else self._gibbs
+                newV = []
+                for i in range(numSteps):
+                    dt = tf.zeros((1, self._dimRec[-1]), dtype='float32')
+                    with tf.variable_scope("ssRBM", reuse=True):
+                        # in ssRNNRBM, the feedback influences only the bias of H.
+                        x_ = tf.zeros((1, self._dimInput), dtype='float32')
+                        bh = tf.get_variable('bh')
+                        Wdh = tf.get_variable('Wdh')
+                        bht = tf.tensordot(dt, Wdh, [[-1], [0]]) + bh
+                        self._rbm._bh = bht
+                        (x_, _, _, _, _, _) = self._rbm.GibbsSampling(V=x_, k=k)
+                        dt, state = self._rnnCell(self._mlp(x_), state)
+                    newV.append(x_)
+                newV = tf.concat(newV, 0)
+                newV = self._sess.run(newV)
+                #
+            else:
+                raise ValueError("Neither input or numSteps is provided!!")
+        return newV if x is None else newV[0]

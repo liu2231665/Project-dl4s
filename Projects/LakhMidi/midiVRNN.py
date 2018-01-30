@@ -11,6 +11,7 @@ from dl4s import full_train
 from dl4s import configVRNN as Config
 from Projects.LakhMidi.accTool import accRNN
 import os
+import matplotlib.pyplot as plt
 
 Config.Opt = 'SGD'
 Config.unitType = 'GRU'
@@ -48,6 +49,12 @@ if __name__ == '__main__':
         Config.loadPath = os.path.join(Config.savePath, 'VRNN-I')
         Dataset = fetchData()
         VRNN = binVRNN(Config)
+        Midi = VRNN.gen_function(numSteps=100)
+        plt.figure(1)
+        plt.imshow(Midi.T, cmap='binary')
+        plt.xticks([])
+        plt.yticks([])
+        plt.show()
         print('Evaluation: start computing the accuracy metric.')
         ACC = accRNN(VRNN, Dataset['test'], batchSize=125)
         print('The testing transcription accuracy is \x1b[1;91m%10.4f\x1b[0m.' % ACC)

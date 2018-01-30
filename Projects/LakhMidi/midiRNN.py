@@ -10,6 +10,7 @@ from dl4s import binRNN, configRNN
 from dl4s import full_train
 from Projects.LakhMidi.accTool import accRNN
 import os
+import matplotlib.pyplot as plt
 
 configRNN.unitType = "GRU"
 #configRNN.Opt = 'Momentum'
