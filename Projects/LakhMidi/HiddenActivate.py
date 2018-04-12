@@ -97,7 +97,8 @@ for i in range(len(testSet)):
     # vis.
     plt.close('all')
     f, (ax1, ax2, ax3, ax4) = plt.subplots(4, sharex=True)
-    ax1.imshow(hiddenCGRNN[0].T, cmap='bwr')
+    im = ax1.imshow(hiddenCGRNN[0].T, cmap='bwr')
+    f.colorbar(mappable=im, orientation="horizontal")
     ax1.axes.get_xaxis().set_visible(False)
     ax1.axes.get_yaxis().set_visible(False)
     #ax1.axis('off')

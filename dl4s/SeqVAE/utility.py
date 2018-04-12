@@ -473,6 +473,7 @@ class configSRNN(object):
     recType = 'LSTM'            # <string> the type of recurrent hidden units(LSTM/GRU/Tanh).
     mlpType = 'relu'            # <string> the type of feedforward hidden units(relu/tanh/sigmoid).
     mode = 'smooth'             # <string> indicate the operating mode of SRNN (smooth/filter).
+    Res = False                 # <bool> indicate whether uses residual parametrization.
     dimRecD = []                # <scalar list> the size of forward recurrent hidden layers.
     dimRecA = []                # <scalar list> the size of backward recurrent hidden layers.
     dimEnc = []
@@ -504,6 +505,7 @@ class stoCell(tf.contrib.rnn.RNNCell):
         self._dimEnc = config.dimEnc
         self._dimDec = config.dimDec
         self._dimDt = config.dimRecD[-1]
+        self._Res = configSRNN.Res
         if len(config.dimRecA) != 0:
             self._dimAt = config.dimRecA[-1]
         else:
@@ -543,6 +545,7 @@ class stoCell(tf.contrib.rnn.RNNCell):
     input: x - the current input with size (batch, frame) where frame = [d_t, a_t]
                the bounds between them is 0~dimDt, dimDt~end
            state - the previous state of the cells.
+           Res - whether using residual learning.
            scope - indicate the variable scope.
     output: 
     """
@@ -557,7 +560,10 @@ class stoCell(tf.contrib.rnn.RNNCell):
             # build post mean and std of the inference network by NN(Z{t-1}, at)
             a_t = x[:, self._dimDt:]
             actPos = self._encoder(tf.concat(axis=1, values=(state, a_t)))
-            pos_mu = tf.tensordot(actPos, self._Wpos_mu, [[-1], [0]]) + self._bpos_mu
+            if self._Res:
+                pos_mu = prior_mu + tf.tensordot(actPos, self._Wpos_mu, [[-1], [0]]) + self._bpos_mu
+            else:
+                pos_mu = tf.tensordot(actPos, self._Wpos_mu, [[-1], [0]]) + self._bpos_mu
             pos_sig = tf.nn.softplus(tf.tensordot(actPos, self._Wpos_sig, [[-1], [0]]) + self._bpos_sig) + 1e-8
             # sample Z/NewSate from the posterior.
             eps = tf.distributions.Normal(loc=0.0, scale=1.0

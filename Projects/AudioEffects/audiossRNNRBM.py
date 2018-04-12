@@ -25,11 +25,12 @@ Config.Gibbs = 1
 Config.W_Norm = True
 Config.muTrain = True
 Config.alphaTrain = True
-Config.eventPath = './audiossRNNRBM/'
-Config.savePath = './audiossRNNRBM/'
-SAVETO = './audiossRNNRBM/historyaudio_ssRNNRBM.npz'
+Config.phiTrain = False
+Config.eventPath = './audiossRNNRBM-1/'
+Config.savePath = './audiossRNNRBM-1/'
+SAVETO = './audiossRNNRBM-1/historyaudio_ssRNNRBM.npz'
 
-Flag = 'evaluation'                       # {'training'/'evaluation'}
+Flag = 'training'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
     if Flag == 'training':

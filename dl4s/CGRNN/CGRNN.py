@@ -325,7 +325,7 @@ class gaussCGRNN(_CGRNN, object):
             W = tf.expand_dims(tf.expand_dims(self.Cell.RBM._W, axis=0), axis=0)
             term1 = newH * W / (self.Cell.RBM._alpha + 1e-8)
             term1 = tf.tensordot(term1, self.Cell.RBM._W, [[-1], [-1]])
-            Cv_sh = 1 / (self.Cell.RBM._gamma + tf.tensordot(newH, self.Cell.RBM._phi, [[-1], [0]]) + 1e-8)
+            Cv_sh = 1 / (tf.expand_dims(self.Cell.RBM._gamma, axis=2) + tf.tensordot(newH, self.Cell.RBM._phi, [[-1], [0]]) + 1e-8)
             term2 = Cv_sh * tf.eye(self._dimInput, batch_shape=[1, 1])
             self.PreV_h = term2 + term1
             self.CovV_h = tf.matrix_inverse(self.PreV_h)

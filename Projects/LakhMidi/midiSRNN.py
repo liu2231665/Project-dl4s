@@ -15,6 +15,7 @@ import os
 Config.Opt = 'SGD'
 Config.unitType = 'GRU'
 Config.mode = 'smooth'
+Config.Res = True
 Config.dimRecD = [500]
 Config.dimRecA = [500]
 Config.dimEnc = [400]
@@ -23,11 +24,11 @@ Config.dimMLPx = [400]
 Config.dimInput = 128
 Config.dimState = 500
 Config.init_scale = 0.01
-Config.eventPath = './binSRNN-s/'
-Config.savePath = './binSRNN-s/'
-SAVETO = './binSRNN-s/historyMidiSRNN-s.npz'
+Config.eventPath = './binSRNN-s-Res/'
+Config.savePath = './binSRNN-s-Res/'
+SAVETO = './binSRNN-s-Res/historyMidiSRNN-s-Res.npz'
 
-Flag = 'evaluation'                       # {'training'/'evaluation'}
+Flag = 'training'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
     if Flag == 'training':
@@ -42,7 +43,7 @@ if __name__ == '__main__':
         # Build the model and prepare the data-set.
         Dataset = fetchData()
         SRNN = binSRNN(Config)
-        full_train(model=SRNN, dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.03,
+        full_train(model=SRNN, dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.003,
                           valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':
