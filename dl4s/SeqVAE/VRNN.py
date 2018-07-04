@@ -8,10 +8,7 @@ Descriptions: the file contains the model description of VRNN.
 import tensorflow as tf
 from .utility import buildVRNN
 from .utility import configVRNN
-from . import GaussKL, BernoulliNLL, GaussNLL
-from dl4s.tools import get_batches_idx
-import numpy as np
-import time, os
+from dl4s.cores.tools import GaussKL, BernoulliNLL, GaussNLL
 
 """#########################################################################
 Class: _VRNN - the hyper abstraction of the VRNN.

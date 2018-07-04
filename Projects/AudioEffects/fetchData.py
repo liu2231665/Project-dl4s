@@ -15,7 +15,7 @@ Descriptions: the files contain the tools to pre-process the IDMT-SMT-
 import os, h5py
 import librosa, librosa.display
 import numpy as np
-from dl4s.tools import get_batches_idx
+from dl4s.cores.tools import get_batches_idx
 
 TRAIN_RATIO = 0.9
 Valid_RATIO = 0.95

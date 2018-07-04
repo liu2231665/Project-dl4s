@@ -7,10 +7,8 @@ Descriptions: the file contains the model description of RNN-RBM.
 from dl4s.TRBM import configRNNRBM, configssRNNRBM
 from dl4s.SeqVAE.utility import buildRec, MLP
 from dl4s.TRBM.RBM import binRBM, gaussRBM, mu_ssRBM, bin_ssRBM
-from dl4s.tools import get_batches_idx
 import tensorflow as tf
 import numpy as np
-import time
 
 """#########################################################################
 Class: _RnnRBM - the hyper abstraction of the RnnRBM.

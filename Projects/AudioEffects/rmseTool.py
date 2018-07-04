@@ -7,7 +7,7 @@ Descriptions: the file contain the tools to compute the reconstructed error
 #########################################################################"""
 
 import numpy as np
-from dl4s.tools import get_batches_idx
+from dl4s.cores.tools import get_batches_idx
 
 """#########################################################################
 Function: rmseRNN - compute average RMSE of reconstructed samples for RNN

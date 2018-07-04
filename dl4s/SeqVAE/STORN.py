@@ -7,10 +7,8 @@ Descriptions: the file contains the model description of STORN.
 
 import tensorflow as tf
 from .utility import buildSTORN
-from . import GaussKL, BernoulliNLL, GaussNLL
-from dl4s.tools import get_batches_idx
+from dl4s.cores.tools import GaussKL, BernoulliNLL, GaussNLL
 import numpy as np
-import time, os
 
 """#########################################################################
 Class: _STORN - the hyper abstraction of the STORN.

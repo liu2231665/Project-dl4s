@@ -7,35 +7,35 @@ Descriptions: the code to train and run the binRNN from dl4s.autoregRNN
 #########################################################################"""
 from Projects.LakhMidi.fetchData import fetchData
 from dl4s import binRNN, configRNN
-from dl4s import full_train
 from Projects.LakhMidi.accTool import accRNN
 import os
-import matplotlib.pyplot as plt
 
 configRNN.unitType = "GRU"
 #configRNN.Opt = 'Momentum'
-configRNN.savePath = "./binRNN/"
-configRNN.eventPath = "./binRNN/"
-configRNN.dimLayer = [128, 500, 128]
+configRNN.savePath = None
+configRNN.eventPath = None
+configRNN.dimLayer = [500]
+configRNN.dimIN = 128
 configRNN.init_scale = 0.01
-SAVETO = './binRNN/historyMidiRNN.npz'
+SAVETO = None
 
-Flag = 'evaluation'                       # {'training'/'evaluation'}
+Flag = 'training'                       # {'training'/'evaluation'}
 
 if __name__ == '__main__':
     if Flag == 'training':
         # Check whether the target event path exists.
-        if not os.path.exists(configRNN.eventPath):
+        if configRNN.eventPath is not None and not os.path.exists(configRNN.eventPath):
             os.makedirs(configRNN.eventPath)
         # Check whether the target saving path exists.
-        if not os.path.exists(configRNN.savePath):
+        if configRNN.savePath is not None and not os.path.exists(configRNN.savePath):
             os.makedirs(configRNN.savePath)
         # Add the save file name into the save path.
-        configRNN.savePath = os.path.join(configRNN.savePath, 'RNN-I')
+        if configRNN.savePath is not None:
+            configRNN.savePath = os.path.join(configRNN.savePath, 'RNN-I')
         # Build the model and prepare the data-set.
         Dataset = fetchData()
         RNN = binRNN(configRNN)
-        full_train(model=RNN, dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.1,
+        RNN.full_train(model=RNN, dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.1,
                           valid_batchSize=125, saveto=SAVETO)
 
     if Flag == 'evaluation':

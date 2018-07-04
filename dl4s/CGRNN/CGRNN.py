@@ -5,7 +5,7 @@ Descriptions: the file contains the model description of CGRNN.
               ----2017.11.15
 #########################################################################"""
 from .utility import configCGRNN, CGCell
-from dl4s.tools import BernoulliNLL, GaussNLL
+from dl4s.cores.tools import BernoulliNLL
 import tensorflow as tf
 import numpy as np
 

@@ -9,7 +9,7 @@ from Projects.LakhMidi.fetchData import fetchData
 from dl4s import binCGRNN, binSRNN
 from dl4s import configCGRNN as Config
 from dl4s import configSRNN
-from dl4s.tools import full_train
+from dl4s.cores.tools import full_train
 from Projects.LakhMidi.accTool import accRBM
 import os
 

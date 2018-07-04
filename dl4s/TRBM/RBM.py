@@ -10,7 +10,7 @@ Descriptions: the file contains the model description of RBM. For each
 
 import tensorflow as tf
 import numpy as np
-from dl4s.tools import BernoulliNLL, GaussNLL
+from dl4s.cores.tools import BernoulliNLL
 
 """#########################################################################
 Class: _RBM - the basic class of a Restricted Boltzmann Machine.

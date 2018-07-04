@@ -4,13 +4,11 @@ Institute: Stony Brook University
 Descriptions: the file contains the model description of SRNN.
               ----2017.11.15
 #########################################################################"""
-from dl4s.tools import GaussKL, BernoulliNLL, GaussNLL
+from dl4s.cores.tools import GaussKL, BernoulliNLL, GaussNLL
 from dl4s.SeqVAE import configSRNN
 from dl4s.SeqVAE.utility import buildSRNN
 import tensorflow as tf
-from dl4s.tools import get_batches_idx
 import numpy as np
-import time
 
 """#########################################################################
 Class: _SRNN - the hyper abstraction of the SRNN.

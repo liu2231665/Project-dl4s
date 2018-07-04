@@ -9,7 +9,7 @@ from Projects.AudioEffects.fetchData import fetchData
 from dl4s import gaussCGRNN, gaussSRNN
 from dl4s import configCGRNN as Config
 from dl4s import configSRNN
-from dl4s.tools import full_train
+from dl4s.cores.tools import full_train
 from Projects.AudioEffects.rmseTool import rmseGaussRNNRBM
 import os
 

@@ -15,7 +15,8 @@ if __name__ == '__main__':
     X = np.random.normal(0, 1.0, size=(100, 25, 200))
     Config = config()
     Config.Opt = 'Momentum'
-    Config.dimLayer = [200, 500, 200]
+    Config.dimLayer = [500]
+    Config.dimIN = 200
     Config.init_scale = 0.1
     Config.eventPath = './RNN/'
     Config.savePath = './RNN/my-model'
@@ -29,7 +30,8 @@ if __name__ == '__main__':
         print("The training loss is %f." % RNN.train_function(input=X, lrate=0.1))
     # test the saving and restoring
     print("The valid loss is %f." % RNN.val_function(input=X))
-    samples = RNN.gen_function(numSteps=100)
+    samples = RNN.generate(numSteps=100)
+    feature = RNN.embed(samples)
     imgplot = plt.imshow(samples, cmap='jet')
     plt.show()
 
@@ -59,4 +61,4 @@ if __name__ == '__main__':
     X['train'] = np.random.normal(1, 0.5, size=(130, 25, 200))
     X['valid'] = np.random.normal(1, 0.5, size=(130, 25, 200))
     X['test'] = np.random.normal(1, 0.5, size=(130, 25, 200))
-    RNN.full_train(dataset=X, maxEpoch=5, earlyStop=10, batchSize=20, learning_rate=0.1, saveto='./RNN/results.npz')
+    RNN.full_train(dataset=X, maxEpoch=5, earlyStop=10, batchSize=20, learning_rate=0.001, saveto='./RNN/results.npz')

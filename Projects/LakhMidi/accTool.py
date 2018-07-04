@@ -17,7 +17,7 @@ Descriptions: the file contain the tools to compute the accuracy of the
 #########################################################################"""
 
 import numpy as np
-from dl4s.tools import get_batches_idx
+from dl4s.cores.tools import get_batches_idx
 
 """#########################################################################
 Function: accRNN - compute the average accuracy of piano-rolls for RNN

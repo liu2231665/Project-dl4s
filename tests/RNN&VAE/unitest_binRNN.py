@@ -16,8 +16,8 @@ if __name__ == '__main__':
     X = np.random.binomial(1, 0.5, size=(40, 25, 100))
     Config = config()
     Config.dimLayer = [100, 500, 100]
-    Config.eventPath = './RNN/'
-    Config.savePath = './RNN/my-model'
+    Config.eventPath = None
+    Config.savePath = None
 
     """
     test training and model operation.
@@ -28,7 +28,7 @@ if __name__ == '__main__':
         print("The training loss is %f." % RNN.train_function(input=X, lrate=0.1))
     # test the generating sample.
     print("The valid loss is %f." % RNN.val_function(input=X))
-    samples = RNN.gen_function(numSteps=40)
+    samples = RNN.generate(numSteps=40)
     imgplot = plt.imshow(samples, cmap='binary')
     plt.show()
 
@@ -36,7 +36,7 @@ if __name__ == '__main__':
     test saving and restoring model.
     """
     RNN.saveModel()
-    loadPath = './RNN/my-model'
+    loadPath = None
     RNN.loadModel(loadPath)
     for i in range(10):
         print(RNN.train_function(input=X, lrate=0.1))
@@ -58,4 +58,4 @@ if __name__ == '__main__':
     X['train'] = np.random.binomial(1, 0.5, size=(130, 25, 100))
     X['valid'] = np.random.binomial(1, 0.5, size=(130, 25, 100))
     X['test'] = np.random.binomial(1, 0.5, size=(130, 25, 100))
-    RNN.full_train(dataset=X, maxEpoch=5, earlyStop=10,  batchSize=125, learning_rate=0.1, saveto='./RNN/results.npz')
+    RNN.full_train(dataset=X, maxEpoch=5, earlyStop=10,  batchSize=125, learning_rate=0.1, saveto=None)

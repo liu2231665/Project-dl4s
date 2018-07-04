@@ -1,5 +1,5 @@
-from dl4s.tools import get_batches_idx
-from dl4s.tools import saveModel, saveEvent, loadModel, full_train
+from dl4s.cores.tools import get_batches_idx
+#--from dl4s.cores.model import _config, _model
 # RNN models.
 from dl4s.autoregRnn.AutoRegressiveRNN import binRNN, gaussRNN
 from dl4s.autoregRnn.utility import config as configRNN

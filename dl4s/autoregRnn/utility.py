@@ -6,12 +6,13 @@ Descriptions: Tools to build an RNN.
 #########################################################################"""
 
 import tensorflow as tf
+from dl4s.cores.model import _config
 import numpy as np
 
 """#########################################################################
 Class: config - Basic configuration of the auto-regressive RNN.
 #########################################################################"""
-class config(object):
+class config(_config, object):
     """
     Elements outside the __init__ method are static elements.
     Elements inside the __init__ method are elements of the object.
@@ -19,12 +20,6 @@ class config(object):
     """
     unitType = 'LSTM'           # <string> the type of hidden units(LSTM/GRU/Tanh).
     dimLayer = []               # <scalar list> the size of each layers [input, hiddens, output].
-    init_scale = 0.1            # <scalar> the initialized scales of the weight.
-    float = 'float32'           # <string> the type of float.
-    Opt = 'SGD'                 # <string> the optimization method.
-    savePath = None             # <string/None> the path to save the model.
-    eventPath = None            # <string/None> the path to save the events for visualization.
-    loadPath = None             # <string/None> the path to load the model.
 
 #
 """#########################################################################
