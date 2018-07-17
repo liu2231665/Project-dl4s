@@ -157,7 +157,7 @@ class gaussVRNN(_VRNN, object):
                     ii = i + 1
                     (_, _, _, _, hidde_, _, _), new_ss = self._varCell(xx, ss)
                     mu = tf.tensordot(hidde_, Wdec_mu, [[-1], [0]]) + bdec_mu
-                    sig = tf.tensordot(hidde_, Wdec_mu, [[-1], [0]]) + bdec_mu
+                    sig = tf.nn.softplus(tf.tensordot(hidde_, Wdec_mu, [[-1], [0]]) + bdec_mu) + 1e-8
                     new_xx = tf.distributions.Normal(loc=mu, scale=sig).sample()
                     new_array = array.write(i, new_xx)
                     return ii, new_xx, new_ss, new_array

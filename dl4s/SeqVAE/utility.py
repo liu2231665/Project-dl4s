@@ -88,7 +88,7 @@ Class: configSTORN - Basic configuration of the STORN models.
        "Learning Stochastic Recurrent Networks" - arxiv.
         https://arxiv.org/abs/1411.7610 
 #########################################################################"""
-class configSTORN(object):
+class configSTORN(_config, object):
     """
     Elements outside the __init__ method are static elements.
     Elements inside the __init__ method are elements of the object.
@@ -98,14 +98,7 @@ class configSTORN(object):
     unitType = 'LSTM'           # <string> the type of hidden units(LSTM/GRU/Tanh).
     dimGen = []                 # <scalar list> the size of hidden layers in generating model.
     dimReg = []                 # <scalar list> the size of hidden layers in recognition model.
-    dimInput = 100                # <scalar> the size of frame of the input.
     dimState = 100                # <scalar> the size of the stochastic layer.
-    init_scale = 0.1            # <scalar> the initialized scales of the weight.
-    float = 'float32'           # <string> the type of float.
-    Opt = 'SGD'                 # <string> the optimization method.
-    savePath = None             # <string/None> the path to save the model.
-    eventPath = None            # <string/None> the path to save the events for visualization.
-    loadPath = None             # <string/None> the path to load the model.
 
 """#########################################################################
 Class: stornCell - Basic step of the STORN models. 
@@ -116,7 +109,7 @@ class stornCell(tf.contrib.rnn.RNNCell):
     input: configSTORN - configuration class in ./utility.
     output: None.
     """
-    def __init__(self, configSTORN):
+    def __init__(self, configSTORN, train=True):
         self._dimState = configSTORN.dimState       # the dimension of stochastic layer
         self._dimGen = configSTORN.dimGen           # the dimension of each layer in generating model.
         self._dimReg = configSTORN.dimReg           # the dimension of each layer in recognition model.
@@ -124,6 +117,8 @@ class stornCell(tf.contrib.rnn.RNNCell):
         self._init_scale = configSTORN.init_scale   # the initialized scale for the model.
         self.hiddenReg = buildRec(self._dimReg, self._unitType, self._init_scale)    # the hidden layer part of the recognition model.
         self.hiddenGen = buildRec(self._dimGen, self._unitType, self._init_scale)    # the hidden layer part of the generating model.
+        #
+        self._train = train
 
     @property
     def state_size(self):
@@ -133,6 +128,15 @@ class stornCell(tf.contrib.rnn.RNNCell):
     def output_size(self):
         # shape of mu, sig and generating hidden output.
         return (self._dimState, self._dimState, self._dimGen[-1])
+
+    """
+    setGen: setting the generative models.
+    """
+    def setGen(self):
+        self._train = False
+
+    def setTrain(self):
+        self._train = True
 
     """
     __call__:
@@ -161,7 +165,11 @@ class stornCell(tf.contrib.rnn.RNNCell):
                                               ).sample(sample_shape=(tf.shape(x)[0], self._dimState))
                 Z_t = muZ + sigZ * eps
             with tf.variable_scope('generateModel'):
-                hg_t, stateGen = self.hiddenGen(tf.concat(axis=1, values=(x, Z_t)), state[len(self._dimReg):])      # generating hidden output batch, frame)
+                if self._train:
+                    # generating hidden output batch, frame)
+                    hg_t, stateGen = self.hiddenGen(tf.concat(axis=1, values=(x, Z_t)), state[len(self._dimReg):])
+                else:
+                    hg_t, stateGen = self.hiddenGen(tf.concat(axis=1, values=(x, eps)), state[len(self._dimReg):])
 
             return (muZ, sigZ, hg_t), stateReg + stateGen
 
@@ -175,57 +183,6 @@ class stornCell(tf.contrib.rnn.RNNCell):
         state0 = self.hiddenReg.zero_state(batch_size, dtype)
         state1 = self.hiddenGen.zero_state(batch_size, dtype)
         return state0 + state1
-
-"""#########################################################################
-Class: halfStornCell - the recurrent cells of generating model of the STORN. 
-#########################################################################"""
-class halfStornCell(tf.contrib.rnn.RNNCell):
-    """
-    __init__: the initialization function.
-    input: configSTORN - configuration class in ./utility.
-    output: None.
-    """
-    def __init__(self, configSTORN, hiddenGen):
-        self._dimState = configSTORN.dimState       # the dimension of stochastic layer
-        self._dimGen = configSTORN.dimGen           # the dimension of each layer in generating model.
-        self._unitType = configSTORN.unitType       # the type of units for recurrent layers.
-        self._init_scale = configSTORN.init_scale   # the initialized scale for the model.
-        self.hiddenGen = hiddenGen    # the hidden layer part of the generating model.
-
-    @property
-    def state_size(self):
-        return self._dimState
-
-    @property
-    def output_size(self):
-        # shape of mu, sig and generating hidden output.
-        return self._dimGen[-1]
-
-    """
-    __call__:
-    input: x - the current input with size (batch, frame)
-           state - the previous state of the cells.
-           scope - indicate the variable scope.
-    output: (muZ, sigZ, hg_t) - the mean and variance of P(Z_t|X_{1:t});
-                                the generating hidden output that will be used by binSTORN/gaussSTORN.
-            stateReg + stateGen - the new state of the cell.
-    """
-    def __call__(self, x, state, scope=None):
-        with tf.variable_scope(scope or type(self).__name__):
-            Z = tf.distributions.Normal(loc=0.0, scale=1.0).sample(sample_shape=(tf.shape(x)[0], self._dimState))
-            with tf.variable_scope('generateModel'):
-                hg_t, stateGen = self.hiddenGen(tf.concat(axis=1, values=(x, Z)), state)
-                return hg_t, stateGen
-
-    """
-    zero_state: generate the zero initial state of the cells.
-    input: batch_size - the batch size of data chunk.
-           dtype - the data type.
-    output: state - the initial zero states.
-    """
-    def zero_state(self, batch_size, dtype):
-        state = self.hiddenGen.zero_state(batch_size, dtype)
-        return state
 
 """#########################################################################
 Function: buildTrainModel - build the model structure (Recognition + Genera
@@ -242,18 +199,12 @@ def buildSTORN(
 ):
     with graph.as_default():
         # define the variational cell of STORN
-        allCell = stornCell(Config)
-        #define the generating cell.
-        halfCell = halfStornCell(Config, allCell.hiddenGen)
+        Cell = stornCell(Config)
 
         # run the whole model.
-        state = allCell.zero_state(tf.shape(x)[0], dtype=tf.float32)
-        (muZ, sigZ, hg_t), _ = tf.nn.dynamic_rnn(allCell, x, initial_state=state)
-        # run the generating model.
-        state = halfCell.zero_state(tf.shape(x)[0], dtype=tf.float32)
-        hiddenGen_t, _ = tf.nn.dynamic_rnn(halfCell, x, initial_state=state)
-    return muZ[:, 0:-1, :], sigZ[:, 0:-1, :], hg_t[:, 0:-1, :], hiddenGen_t[:, 0:-1, :], \
-           allCell, halfCell
+        state = Cell.zero_state(tf.shape(x)[0], dtype=tf.float32)
+        (muZ, sigZ, hg_t), _ = tf.nn.dynamic_rnn(Cell, x, initial_state=state)
+    return muZ[:, 0:-1, :], sigZ[:, 0:-1, :], hg_t[:, 0:-1, :], Cell
 
 """###############################################VRNN#####################################################"""
 #####################################################

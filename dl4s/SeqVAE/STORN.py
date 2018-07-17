@@ -8,12 +8,13 @@ Descriptions: the file contains the model description of STORN.
 import tensorflow as tf
 from .utility import buildSTORN
 from dl4s.cores.tools import GaussKL, BernoulliNLL, GaussNLL
+from dl4s.cores.model import _model
 import numpy as np
 
 """#########################################################################
 Class: _STORN - the hyper abstraction of the STORN.
 #########################################################################"""
-class _STORN(object):
+class _STORN(_model, object):
     """#########################################################################
     __init__:the initialization function.
     input: Config - configuration class in ./utility.
@@ -21,37 +22,23 @@ class _STORN(object):
     #########################################################################"""
     def __init__(
             self,
-            configSTORN
+            config
     ):
         # Check the dimension configuration.
-        if configSTORN.dimGen == []:
+        if config.dimGen == []:
             raise (ValueError('The generating structure is empty!'))
-        if configSTORN.dimReg == []:
+        if config.dimReg == []:
             raise (ValueError('The recognition structure is empty!'))
-
-        # <tensor graph> define a default graph.
-        self._graph = tf.Graph()
+        _model.__init__(self, config=config)
         with self._graph.as_default():
-            # <tensor placeholder> input.
-            self.x = tf.placeholder(dtype='float32', shape=[None, None, configSTORN.dimInput])
-            # <tensor placeholder> learning rate.
-            self.lr = tf.placeholder(dtype='float32', shape=(), name='learningRate')
             # <scalar list> dimensions of hidden layers in generating model.
-            self._dimGen = configSTORN.dimGen
+            self._dimGen = config.dimGen
             # <scalar list> dimensions of hidden layers in recognition model.
-            self._dimReg = configSTORN.dimReg
+            self._dimReg = config.dimReg
             # <scalar> dimensions of input frame.
-            self._dimInput = configSTORN.dimInput
+            self._dimInput = config.dimIN
             # <scalar> dimensions of stochastic states.
-            self._dimState = configSTORN.dimState
-            # <string/None> path to save the model.
-            self._savePath = configSTORN.savePath
-            # <string/None> path to save the events.
-            self._eventPath = configSTORN.eventPath
-            # <string/None> path to load the events.
-            self._loadPath = configSTORN.loadPath
-            # <list> collection of trainable parameters.
-            self._params = []
+            self._dimState = config.dimState
 
             # build the structure.
             # self._muZ - the mean value of conditional Gaussian P(Z|X)         ###
@@ -62,8 +49,7 @@ class _STORN(object):
             #               model, with Zt sampled from prior P(Z)= N(0, 1)     ###
             # self._allCell - recurrent cell representing the whole model       ###
             # self._halfCell - recurrent cell representing the generating model.###
-            self._muZ, self._sigZ, self._hg_t, self._half_hg_t, self._allCell, self._halfCell \
-                = buildSTORN(self.x, self._graph, configSTORN)
+            self._muZ, self._sigZ, self._hg_t, self._Cell = buildSTORN(self.x, self._graph, config)
             # <pass> will be define in the children classes.
             self._loss = GaussKL(self._muZ, self._sigZ**2, 0.0, 1.0)
             self._kl_divergence = self._loss
@@ -76,81 +62,18 @@ class _STORN(object):
             # <pass> the output of P(X|Z) given Z ~ N(0,1) will be define in the children classes.
             self._halfgenOut = None
 
-            # <Tensorflow Optimizer>.
-            if configSTORN.Opt == 'Adadelta':
-                self._optimizer = tf.train.AdadeltaOptimizer(learning_rate=self.lr)
-            elif configSTORN.Opt == 'Adam':
-                self._optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
-            elif configSTORN.Opt == 'Momentum':
-                self._optimizer = tf.train.MomentumOptimizer(self.lr, 0.9)
-            elif configSTORN.Opt == 'SGD':
-                self._optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.lr)
-            else:
-                raise (ValueError("Config.Opt should be either 'Adadelta', 'Adam', 'Momentum' or 'SGD'!"))
-            # <Tensorflow Session>.
-            self._sess = tf.Session(graph=self._graph)
-
     """#########################################################################
-    _runSession: initialize the graph or restore from the load path.
-    input: None.
-    output: None.
-    #########################################################################"""
-    def _runSession(self):
-        if self._loadPath is None:
-            self._sess.run(tf.global_variables_initializer())
-        else:
-            saver = tf.train.Saver()
-            saver.restore(self._sess, self._loadPath)
-        return
-
-    """#########################################################################
-    train_function: compute the loss and update the tensor variables.
-    input: input - numerical input.
-           lrate - <scalar> learning rate.
-    output: the loss value.
-    #########################################################################"""
-    def train_function(self, input, lrate):
-        with self._graph.as_default():
-            zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
-            con_input = np.concatenate((zero_padd, input), axis=1)
-            _, loss_value = self._sess.run([self._train_step, self._loss],
-                                           feed_dict={self.x: con_input, self.lr: lrate})
-        return loss_value * input.shape[-1]
-
-    """#########################################################################
-    val_function: compute the loss with given input.
-    input: input - numerical input.
-    output: the loss value.
-    #########################################################################"""
-    def val_function(self, input):
-        with self._graph.as_default():
-            zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
-            con_input = np.concatenate((zero_padd, input), axis=1)
-            loss_value = self._sess.run(self._loss, feed_dict={self.x: con_input})
-        return loss_value * input.shape[-1]
-
-    """#########################################################################
-    recognitionOutput: compute the P(Z|X) with given X.
+    encoder: compute the P(Z|X) with given X.
     input: input - numerical input.
     output: the mean and std of P(Z|X).
     #########################################################################"""
-    def recognitionOutput(self, input):
+    def encoder(self, input):
         with self._graph.as_default():
             zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
             con_input = np.concatenate((zero_padd, input), axis=1)
             output = self._sess.run(self._regOut, feed_dict={self.x: con_input})
             return output[0][:, 0:-1, :], output[1][:, 0:-1, :]
 
-    """#########################################################################
-    output_function: reconstruction function.
-    input: input - .
-    output: should be the reconstruction represented by the probability.
-    #########################################################################"""
-    def output_function(self, input):
-        with self._graph.as_default():
-            zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
-            con_input = np.concatenate((zero_padd, input), axis=1)
-            return self._sess.run(self._allgenOut, feed_dict={self.x: con_input})
 
 """#########################################################################
 Class: binSTORN - the STORN model for stochastic binary inputs.
@@ -168,48 +91,41 @@ class binSTORN(_STORN, object):
         super().__init__(configSTORN)
         with self._graph.as_default():
             with tf.variable_scope('logit'):
-                W = tf.get_variable('W', shape=(configSTORN.dimGen[-1], configSTORN.dimInput))
-                b = tf.get_variable('b', shape=configSTORN.dimInput, initializer=tf.zeros_initializer)
+                W = tf.get_variable('W', shape=(configSTORN.dimGen[-1], self._dimInput))
+                b = tf.get_variable('b', shape=self._dimInput, initializer=tf.zeros_initializer)
             # compute the generating outputs.
-            self._allgenOut = tf.nn.sigmoid(tf.tensordot(self._hg_t, W, [[-1], [0]]) + b)
-            self._halfgenOut = tf.nn.sigmoid(tf.tensordot(self._half_hg_t, W, [[-1], [0]]) + b)
-            self._loss += BernoulliNLL(self.x[:, 1:, :], self._allgenOut)
+            self._dec = tf.nn.sigmoid(tf.tensordot(self._hg_t, W, [[-1], [0]]) + b)
+            self._outputs = self._dec
+            #
+            self._loss += BernoulliNLL(self.x[:, 1:, :], self._outputs)
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(tf.cast(tf.shape(self.x), tf.float32)[-1] * self._loss)
+            """define the process to generate samples."""
+            # the initial state and initial input of the RNN.
+            state = self._Cell.zero_state(1, dtype=tf.float32)
+            x_ = tf.zeros((1, self._dimInput), dtype='float32')
+            # TensorArray to save the output of the generating.
+            gen_operator = tf.TensorArray(tf.float32, self.sampleLen)
+            # condition and body of while loop (input: i-iteration, xx-RNN input, ss-RNN state)
+            i = tf.constant(0)
+            cond = lambda i, xx, ss, array: tf.less(i, self.sampleLen)
+            #
+            # Set the variational cell to use the prior P(Z) to generate Zt.
+            self._Cell.setGen()
+
+            def body(i, xx, ss, array):
+                ii = i + 1
+                (_, _, hidde_), new_ss = self._Cell(xx, ss)
+                probs = tf.nn.sigmoid(tf.tensordot(hidde_, W, [[-1], [0]]) + b)
+                new_xx = tf.distributions.Bernoulli(probs=probs, dtype=tf.float32).sample()
+                new_array = array.write(i, new_xx)
+                return ii, new_xx, new_ss, new_array
+
+            gen_operator = tf.while_loop(cond, body, [i, x_, state, gen_operator])[-1]
+            self._gen_operator = gen_operator.concat()
+            #
             self._runSession()
 
-    """#########################################################################
-    gen_function: generate samples.
-    input: numSteps - the length of the sample sequence.
-    output: should be the sample.
-    #########################################################################"""
-    def gen_function(self,  numSteps):
-        with self._graph.as_default():
-            state = self._halfCell.zero_state(1, dtype=tf.float32)
-            x_ = tf.zeros((1, self._dimInput), dtype='float32')
-            samples = []
-            with tf.variable_scope('logit', reuse=True):
-                W = tf.get_variable('W')
-                b = tf.get_variable('b')
-                for i in range(numSteps):
-                    hidde_, state = self._halfCell(x_, state)
-                    probs = tf.nn.sigmoid(tf.nn.xw_plus_b(hidde_, W, b))
-                    x_ = tf.distributions.Bernoulli(probs=probs, dtype=tf.float32).sample()
-                    samples.append(x_)
-            samples = tf.concat(samples, 0)
-        return self._sess.run(samples)
-
-    """#########################################################################
-    output_function: generate the reconstruction of input.
-    input: input - .
-    output: the reconstruction indicated by the binary probability.
-    #########################################################################"""
-    def output_function(self, input):
-        with self._graph.as_default():
-            zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
-            con_input = np.concatenate((zero_padd, input), axis=1)
-            prob = self._sess.run( self._allgenOut, feed_dict={self.x: con_input})
-        return prob
 
 
 """#########################################################################
@@ -228,57 +144,44 @@ class gaussSTORN(_STORN, object):
         super().__init__(configSTORN)
         with self._graph.as_default():
             with tf.variable_scope('output'):
-                Wg_mu = tf.get_variable('Wg_mu', shape=(configSTORN.dimGen[-1], configSTORN.dimInput))
-                bg_mu = tf.get_variable('bg_mu', shape=configSTORN.dimInput, initializer=tf.zeros_initializer)
-                Wg_sig = tf.get_variable('Wg_sig', shape=(configSTORN.dimGen[-1], configSTORN.dimInput))
-                bg_sig = tf.get_variable('bg_sig', shape=configSTORN.dimInput, initializer=tf.zeros_initializer)
+                Wg_mu = tf.get_variable('Wg_mu', shape=(configSTORN.dimGen[-1], self._dimInput))
+                bg_mu = tf.get_variable('bg_mu', shape=self._dimInput, initializer=tf.zeros_initializer)
+                Wg_sig = tf.get_variable('Wg_sig', shape=(configSTORN.dimGen[-1], self._dimInput))
+                bg_sig = tf.get_variable('bg_sig', shape=self._dimInput, initializer=tf.zeros_initializer)
             # compute the generating outputs.
-            meanAll = tf.tensordot(self._hg_t, Wg_mu, [[-1], [0]]) + bg_mu
-            sigALL = tf.nn.softplus(tf.tensordot(self._hg_t, Wg_sig, [[-1], [0]]) + bg_sig) + 1e-8
-            self._allgenOut = [meanAll, sigALL]
-            #
-            meanHalf = tf.tensordot(self._half_hg_t, Wg_mu, [[-1], [0]]) + bg_mu
-            sigHalf = tf.nn.softplus(tf.tensordot(self._half_hg_t, Wg_sig, [[-1], [0]]) + bg_sig) + 1e-8
-            self._halfgenOut = [meanHalf, sigHalf]
+            mu = tf.tensordot(self._hg_t, Wg_mu, [[-1], [0]]) + bg_mu
+            std = tf.nn.softplus(tf.tensordot(self._hg_t, Wg_sig, [[-1], [0]]) + bg_sig) + 1e-8
+            self._dec = [mu, std]
+            self._outputs = mu
             #
             # Compute the gaussian negative ll.
-            self._loss += GaussNLL(self.x[:, 1:, :], self._allgenOut[0], self._allgenOut[1]**2)
+            self._loss += GaussNLL(self.x[:, 1:, :], mu, std**2)
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(tf.cast(tf.shape(self.x), tf.float32)[-1] * self._loss)
-            self._runSession()
-
-    """#########################################################################
-    gen_function: generate samples.
-    input: numSteps - the length of the sample sequence.
-    output: should be the sample.
-    #########################################################################"""
-    def gen_function(self, numSteps):
-        with self._graph.as_default():
-            state = self._halfCell.zero_state(1, dtype=tf.float32)
+            # TODO: define iteration for reconstruction.
+            """define the process to generate samples."""
+            # the initial state and initial input of the RNN.
+            state = self._Cell.zero_state(1, dtype=tf.float32)
             x_ = tf.zeros((1, self._dimInput), dtype='float32')
-            samples = []
-            with tf.variable_scope('output', reuse=True):
-                Wg_mu = tf.get_variable('Wg_mu')
-                bg_mu = tf.get_variable('bg_mu')
-                Wg_sig = tf.get_variable('Wg_sig')
-                bg_sig = tf.get_variable('bg_sig')
-                for i in range(numSteps):
-                    hidde_, state = self._halfCell(x_, state)
-                    mu = tf.nn.xw_plus_b(hidde_, Wg_mu, bg_mu)
-                    sig = tf.nn.softplus(tf.nn.xw_plus_b(hidde_, Wg_sig, bg_sig)) + 1e-8
-                    x_ = tf.distributions.Normal(loc=mu, scale=sig).sample()
-                    samples.append(x_)
-            samples = tf.concat(samples, 0)
-        return self._sess.run(samples)
+            # TensorArray to save the output of the generating.
+            gen_operator = tf.TensorArray(tf.float32, self.sampleLen)
+            # condition and body of while loop (input: i-iteration, xx-RNN input, ss-RNN state)
+            i = tf.constant(0)
+            cond = lambda i, xx, ss, array: tf.less(i, self.sampleLen)
+            #
+            # Set the variational cell to use the prior P(Z) to generate Zt.
+            self._Cell.setGen()
 
-    """#########################################################################
-    output_function: generate the reconstruction of input.
-    input: input - .
-    output: the reconstruction indicated by the mean of conditional Gaussian.
-    #########################################################################"""
-    def output_function(self, input):
-        with self._graph.as_default():
-            zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
-            con_input = np.concatenate((zero_padd, input), axis=1)
-            mean, std = self._sess.run(self._allgenOut, feed_dict={self.x: con_input})
-        return mean, std
+            def body(i, xx, ss, array):
+                ii = i + 1
+                (_, _, hidde_), new_ss = self._Cell(xx, ss)
+                mu = tf.tensordot(hidde_, Wg_mu, [[-1], [0]]) + bg_mu
+                sig = tf.nn.softplus(tf.tensordot(hidde_, Wg_sig, [[-1], [0]]) + bg_sig) + 1e-8
+                new_xx = tf.distributions.Normal(loc=mu, scale=sig).sample()
+                new_array = array.write(i, new_xx)
+                return ii, new_xx, new_ss, new_array
+
+            gen_operator = tf.while_loop(cond, body, [i, x_, state, gen_operator])[-1]
+            self._gen_operator = gen_operator.concat()
+            #
+            self._runSession()

@@ -10,17 +10,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
-    X = dict()
     X = np.random.binomial(1, 0.5, size=(100, 250, 200))
     Config = configSTORN()
     Config.Opt = 'SGD'
     Config.dimGen = [200]
     Config.dimReg = [200]
-    Config.dimInput = 200
+    Config.dimIN = 200
     Config.dimState = 200
     Config.init_scale = 0.01
-    Config.eventPath = './STORN/'
-    Config.savePath = './STORN/my-model'
+    Config.eventPath = None
+    Config.savePath = None
 
     """
     test training and model operation.
@@ -33,7 +32,7 @@ if __name__ == '__main__':
     test the generating sample.
     """
     print("The valid ELBO is %f." % STORN.val_function(input=X))
-    samples = STORN.gen_function(numSteps=40)
+    samples = STORN.generate(numSteps=40)
     plt.figure(1)
     plt.imshow(samples, cmap='binary')
 
@@ -41,7 +40,7 @@ if __name__ == '__main__':
     test the recognition model.
     """
     plt.figure(2)
-    mu, sigma2 = STORN.recognitionOutput(X)
+    mu, sigma2 = STORN.encoder(X)
     plt.subplot(211)
     plt.imshow(mu[0, :, :], cmap='jet')
     plt.subplot(212)
@@ -52,7 +51,7 @@ if __name__ == '__main__':
     test saving and restoring model.
     """
     STORN.saveModel()
-    loadPath = './STORN/my-model'
+    loadPath = None
     STORN.loadModel(loadPath)
     for i in range(10):
         print(STORN.train_function(input=X, lrate=0.1))

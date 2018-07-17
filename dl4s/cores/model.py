@@ -18,7 +18,7 @@ class _config(object):
     savePath = None             # <string/None> the path to save the model.
     eventPath = None            # <string/None> the path to save the events for visualization.
     loadPath = None             # <string/None> the path to load the model.
-    dimIN = 100                  # <int> dimension of input.
+    dimIN = None                  # <int> dimension of input.
 
 """#########################################################################
 Class: _model - the hyper abstraction of neural models.
@@ -171,14 +171,14 @@ class _model(object):
     def impaint(self, input, mask):
         pass
 
-    # TODO: test this function.
     """#########################################################################
     reconstruct: reconstruction the noise-free version of data.
     #########################################################################"""
     def reconstruct(self, input):
         with self._graph.as_default():
             class_type = self.__class__.__name__
-            if class_type == "binRNN" or class_type == "gaussRNN":
+            if class_type == "binRNN" or class_type == "gaussRNN" or \
+                class_type == "binSTORN" or class_type == "gaussSTORN":
                 zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
                 con_input = np.concatenate((zero_padd, input), axis=1)
                 output = self._sess.run(self._outputs, feed_dict={self.x: con_input})
@@ -215,7 +215,8 @@ class _model(object):
     def train_function(self, input, lrate, *args, **kwargs):
         with self._graph.as_default():
             class_type = self.__class__.__name__
-            if class_type == "binRNN" or class_type == "gaussRNN":
+            if class_type == "binRNN" or class_type == "gaussRNN" or \
+                class_type == "binSTORN" or class_type == "gaussSTORN":
                 zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
                 input = np.concatenate((zero_padd, input), axis=1)
             #
@@ -231,7 +232,8 @@ class _model(object):
     def val_function(self, input, *args, **kwargs):
         with self._graph.as_default():
             class_type = self.__class__.__name__
-            if class_type == "binRNN" or class_type == "gaussRNN":
+            if class_type == "binRNN" or class_type == "gaussRNN" or \
+                class_type == "binSTORN" or class_type == "gaussSTORN":
                 zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
                 input = np.concatenate((zero_padd, input), axis=1)
             loss_value = self._sess.run(self._loss, feed_dict={self.x: input})

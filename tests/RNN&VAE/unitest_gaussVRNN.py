@@ -11,7 +11,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
-    X = dict()
     X = np.random.normal(0, 1.0, size=(100, 25, 200))
     Config = config()
     Config.Opt = 'SGD'
