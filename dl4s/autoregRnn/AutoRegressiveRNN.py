@@ -50,18 +50,6 @@ class _arRNN(_model, object):
             self._feature = self._hiddenOutput
         return
 
-    """#########################################################################
-    output_function: compute the output with given input.
-    input: input - numerical input.
-    output: the output values of the network.
-    #########################################################################"""
-    def output_function(self, input):
-        with self._graph.as_default():
-            zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
-            con_input = np.concatenate((zero_padd, input), axis=1)
-            output = self._sess.run(self._outputs, feed_dict={self.x: con_input})
-        return output[:, 0:-1, :]
-
 
 """#########################################################################
 Class: binRNN - the auto-regressive Recurrent Neural Network for stochastic
@@ -143,7 +131,9 @@ class gaussRNN(_arRNN, object):
                 #        (positive definiteness is assured by softplus function.)
                 mu = tf.tensordot(self._hiddenOutput, W_mu, [[-1], [0]]) + b_mu
                 sig = tf.nn.softplus(tf.tensordot(self._hiddenOutput, W_sig, [[-1], [0]]) + b_sig) + 1e-8
-                self._outputs = [mu, sig]
+                # mu/sigma of the approximated probability
+                self._prob = [mu, sig]
+                self._outputs = mu
                 """define the loss function as negative log-likelihood."""
                 self._loss = GaussNLL(x=self.x[:, 1:, :], mean=mu[:, 0:-1, :], sigma=sig[:, 0:-1, :])
                 self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
@@ -171,16 +161,6 @@ class gaussRNN(_arRNN, object):
                 self._gen_operator = gen_operator.concat()
                 #
                 self._runSession()
-
-    """#########################################################################
-    output_function: reconstruction of the output_function in class: arRNN.
-    #########################################################################"""
-    def output_function(self, input):
-        with self._graph.as_default():
-            zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
-            con_input = np.concatenate((zero_padd, input), axis=1)
-            output = self._sess.run(self._outputs, feed_dict={self.x: con_input})
-        return output[0][:, 0:-1, :], output[1][:, 0:-1, :]
 
 
 """

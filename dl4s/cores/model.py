@@ -168,12 +168,23 @@ class _model(object):
         return
 
     # TODO:
-    def impaint(self):
+    def impaint(self, input, mask):
         pass
 
-    # TODO:
-    def reconstruct(self, input, mask):
-        pass
+    # TODO: test this function.
+    """#########################################################################
+    reconstruct: reconstruction the noise-free version of data.
+    #########################################################################"""
+    def reconstruct(self, input):
+        with self._graph.as_default():
+            class_type = self.__class__.__name__
+            if class_type == "binRNN" or class_type == "gaussRNN":
+                zero_padd = np.zeros(shape=(input.shape[0], 1, input.shape[2]), dtype='float32')
+                con_input = np.concatenate((zero_padd, input), axis=1)
+                output = self._sess.run(self._outputs, feed_dict={self.x: con_input})
+                return output[:, 0:-1, :]
+            else:
+                return self._sess.run(self._outputs, feed_dict={self.x: input})
 
     """#########################################################################
     embed: return extracted feature/descriptor/representation of data.

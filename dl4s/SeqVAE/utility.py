@@ -5,6 +5,7 @@ Descriptions: Tools to build an sequential VAE.
               ----2017.11.03
 #########################################################################"""
 import tensorflow as tf
+from dl4s.cores.model import _config
 
 """#########################################################################
 Function: buildRec - build the recurrent hidden layers.
@@ -265,7 +266,7 @@ Class: configVRNN - Basic configuration of the VRNN models.
        "A Recurrent Latent Variable Model for Sequential Data" - arxiv.
         https://arxiv.org/abs/1506.02216 
 #########################################################################"""
-class configVRNN(object):
+class configVRNN(_config, object):
     """
     Elements outside the __init__ method are static elements.
     Elements inside the __init__ method are elements of the object.
@@ -278,14 +279,7 @@ class configVRNN(object):
     dimForZ = []                # <scalar list> the size of feedforward hidden layers of stochastic layer.
     dimForEnc = []              # <scalar list> the size of feedforward hidden layers in the encoder.
     dimForDec = []              # <scalar list> the size of feedforward hidden layers in the decoder.
-    dimInput = 100              # <scalar> the size of frame of the input.
     dimState = 100              # <scalar> the size of the stochastic layer.
-    init_scale = 0.1            # <scalar> the initialized scales of the weight.
-    float = 'float32'           # <string> the type of float.
-    Opt = 'SGD'                 # <string> the optimization method.
-    savePath = None             # <string/None> the path to save the model.
-    eventPath = None            # <string/None> the path to save the events for visualization.
-    loadPath = None             # <string/None> the path to load the model.
 
 """#########################################################################
 Class: varCell - the variational cell of the VRNN models. 
@@ -294,11 +288,12 @@ class varCell(tf.contrib.rnn.RNNCell):
     """
     __init__: the initialization function.
     input: configVRNN - configuration class in ./utility.
+           whether the model is in train mode or generative mode.
     output: None.
     """
     def __init__(self, config=configVRNN, train=True):
         self._dimState = config.dimState            # the dimension of stochastic layer
-        self._dimInput = config.dimInput
+        self._dimInput = config.dimIN
         self._dimRec = config.dimRec                # the dimension of recurrent layers.
         self._dimMLPx = config.dimForX
         self._dimMLPz = config.dimForZ
@@ -420,11 +415,8 @@ class varCell(tf.contrib.rnn.RNNCell):
         with tf.variable_scope('decoder', initializer=initializer):
             zz = self._mlpz(z)
             hidden_dec = self._mlpDec(tf.concat(axis=1, values=(zz, h_tm1)))
-        # Unpdate the state.
-        if self._train:
-            _, newState = self._rnn(tf.concat(axis=1, values=(xx, zz)), state)
-        else:
-            _, newState = self._rnn(tf.concat(axis=1, values=(xx, zz)), state)
+        # Update the state.
+        _, newState = self._rnn(tf.concat(axis=1, values=(xx, zz)), state)
         return (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1, z), newState
 
     """
@@ -442,11 +434,16 @@ Function: buildVRNN - build the whole graph of VRNN.
 input: x - a placeholder that indicates the input data. [batch, step, frame]
        graph - the default tf.graph that we build the model.
        Config - model configuration.
+output: [prior_mu, prior_sig] -- parameters of prior P(Z)
+        [pos_mu, pos_sig] --  parameters of posterior P(Z|X)
+        [hidden_dec] -- hidden activation of the decoder part.
+        [allCell] -- return the rnn cell.
+        [z] -- sampling of Z.
 #########################################################################"""
 def buildVRNN(
         x,
         graph,
-        Config=configVRNN(),
+        Config,
 ):
     with graph.as_default():
         # define the variational cell of VRNN
@@ -455,7 +452,7 @@ def buildVRNN(
         # run the whole model.
         state = allCell.zero_state(tf.shape(x)[0], dtype=tf.float32)
         (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1, z), _ = tf.nn.dynamic_rnn(allCell, x, initial_state=state)
-        return prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, h_tm1, allCell, z
+        return prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, allCell, z
 
 
 """###############################################SRNN#####################################################"""

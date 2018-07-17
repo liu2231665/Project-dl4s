@@ -18,11 +18,11 @@ if __name__ == '__main__':
     Config.dimRec = [200]
     Config.dimForX = [100]
     Config.dimForZ = [100]
-    Config.dimInput = 200
+    Config.dimIN = 200
     Config.dimState = 200
     Config.init_scale = 0.01
-    Config.eventPath = './VRNN/'
-    Config.savePath = './VRNN/my-model'
+    Config.eventPath = None
+    Config.savePath = None
 
     """
     test training and model operation.
@@ -33,7 +33,7 @@ if __name__ == '__main__':
         print("The training loss is %f." % RNN.train_function(input=X, lrate=0.01))
     # test the saving and restoring
     print("The valid loss is %f." % RNN.val_function(input=X))
-    samples = RNN.gen_function(numSteps=100)
+    samples = RNN. generate(numSteps=100)
     imgplot = plt.imshow(samples, cmap='jet')
     plt.show()
 
@@ -41,7 +41,7 @@ if __name__ == '__main__':
     test saving and restoring model.
     """
     RNN.saveModel()
-    loadPath = './VRNN/my-model'
+    loadPath = None
     RNN.loadModel(loadPath)
     for i in range(10):
         print(RNN.train_function(input=X, lrate=0.01))
@@ -63,4 +63,4 @@ if __name__ == '__main__':
     X['train'] = np.random.normal(1, 0.5, size=(130, 25, 200))
     X['valid'] = np.random.normal(1, 0.5, size=(130, 25, 200))
     X['test'] = np.random.normal(1, 0.5, size=(130, 25, 200))
-    RNN.full_train(dataset=X, maxEpoch=5, earlyStop=10, batchSize=20, learning_rate=0.01, saveto='./VRNN/results.npz')
+    RNN.full_train(dataset=X, maxEpoch=5, earlyStop=10, batchSize=20, learning_rate=0.01, saveto=None)

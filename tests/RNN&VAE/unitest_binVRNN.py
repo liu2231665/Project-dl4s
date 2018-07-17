@@ -17,11 +17,11 @@ if __name__ == '__main__':
     Config.dimRec = [200]
     Config.dimForX = [100]
     Config.dimForZ = [100]
-    Config.dimInput = 200
+    Config.dimIN = 200
     Config.dimState = 200
     Config.init_scale = 0.01
-    Config.eventPath = './VRNN/'
-    Config.savePath = './VRNN/my-model'
+    Config.eventPath = None
+    Config.savePath = None
 
     """
     test training and model operation.
@@ -34,7 +34,7 @@ if __name__ == '__main__':
     test the generating sample.
     """
     print("The valid ELBO is %f." % VRNN.val_function(input=X))
-    samples = VRNN.gen_function(numSteps=40)
+    samples = VRNN.generate(numSteps=40)
     plt.figure(1)
     plt.imshow(samples, cmap='binary')
 
@@ -53,7 +53,7 @@ if __name__ == '__main__':
     test saving and restoring model.
     """
     VRNN.saveModel()
-    loadPath = './VRNN/my-model'
+    loadPath = None
     VRNN.loadModel(loadPath)
     for i in range(10):
         print(VRNN.train_function(input=X, lrate=0.01))
@@ -76,5 +76,5 @@ if __name__ == '__main__':
     X['valid'] = np.random.binomial(1, 0.5, size=(130, 25, 200))
     X['test'] = np.random.binomial(1, 0.5, size=(130, 25, 200))
     VRNN.full_train(dataset=X, maxEpoch=5, earlyStop=10, batchSize=125, learning_rate=0.01,
-                     saveto='./VRNN/results.npz')
+                     saveto=None)
 
