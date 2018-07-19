@@ -417,7 +417,7 @@ Class: configSRNN - Basic configuration of the SRNN models.
        "Sequential Neural Models with Stochastic Layers" - arxiv.
         https://arxiv.org/abs/1605.07571
 #########################################################################"""
-class configSRNN(object):
+class configSRNN(_config, object):
     recType = 'LSTM'            # <string> the type of recurrent hidden units(LSTM/GRU/Tanh).
     mlpType = 'relu'            # <string> the type of feedforward hidden units(relu/tanh/sigmoid).
     mode = 'smooth'             # <string> indicate the operating mode of SRNN (smooth/filter).
@@ -427,14 +427,7 @@ class configSRNN(object):
     dimEnc = []
     dimDec = []
     dimMLPx = []                # <scalar list> the size of MLP of X.
-    dimInput = 100              # <scalar> the size of frame of the input.
     dimState = 100              # <scalar> the size of the stochastic layer.
-    init_scale = 0.1            # <scalar> the initialized scales of the weight.
-    float = 'float32'           # <string> the type of float.
-    Opt = 'SGD'                 # <string> the optimization method.
-    savePath = None             # <string/None> the path to save the model.
-    eventPath = None            # <string/None> the path to save the events for visualization.
-    loadPath = None             # <string/None> the path to load the model.
 
 """#########################################################################
 Class: stoCell - the stochastic cell of the SRNN models. 
@@ -446,18 +439,18 @@ class stoCell(tf.contrib.rnn.RNNCell):
            train - indicate whether the model is trained or sampling.
     output: None.
     """
-    def __init__(self, config=configSRNN, train=True):
+    def __init__(self, config, train=True):
         self._train = train
         self._dimState = config.dimState
-        self._dimInput = config.dimInput
+        self._dimInput = config.dimIN
         self._dimEnc = config.dimEnc
         self._dimDec = config.dimDec
         self._dimDt = config.dimRecD[-1]
-        self._Res = configSRNN.Res
+        self._Res = config.Res
         if len(config.dimRecA) != 0:
             self._dimAt = config.dimRecA[-1]
         else:
-            self._dimAt = config.dimRecD[-1] + config.dimInput
+            self._dimAt = config.dimRecD[-1] + config.dimIN
         # define the hidden output shape of the encoder.
         if len(self._dimEnc) != 0:
             self._dimOutEnc = self._dimEnc[-1]
@@ -466,16 +459,15 @@ class stoCell(tf.contrib.rnn.RNNCell):
         #
         self._recType = config.recType              # the type of units for recurrent layers.
         self._mlpType = config.mlpType              # the type of units for recurrent layers.
-        self._init_scale = configSRNN.init_scale    # the initialized scale for the model.
         # Decoder Input = [Z{t}, d{t}]
         with tf.variable_scope('DecMLP'):
-            self._decoder = MLP(self._init_scale, self._dimState+self._dimDt, self._dimDec, self._mlpType)
+            self._decoder = MLP(config.init_scale, self._dimState+self._dimDt, self._dimDec, self._mlpType)
 
         # Encoder Input = [Z{t-1}, a{t}]
         with tf.variable_scope('EncMLP'):
-            self._encoder = MLP(self._init_scale, self._dimState+self._dimAt, self._dimEnc, self._mlpType)
+            self._encoder = MLP(config.init_scale, self._dimState+self._dimAt, self._dimEnc, self._mlpType)
         # system's parameter for the prior P(Z)= NN(Z{t-1}, d{t})
-        initializer = tf.random_uniform_initializer(-self._init_scale, self._init_scale)
+        initializer = tf.random_uniform_initializer(-config.init_scale, config.init_scale)
         with tf.variable_scope('prior', initializer=initializer):
             self._Wp_mu = tf.get_variable('Wp_mu', shape=(self._dimState+self._dimDt, self._dimState))
             self._bp_mu = tf.get_variable('bp_mu', shape=self._dimState, initializer=tf.zeros_initializer)
@@ -487,6 +479,15 @@ class stoCell(tf.contrib.rnn.RNNCell):
             self._bpos_mu = tf.get_variable('bpos_mu', shape=self._dimState, initializer=tf.zeros_initializer)
             self._Wpos_sig = tf.get_variable('Wpos_sig', shape=(self._dimOutEnc, self._dimState))
             self._bpos_sig = tf.get_variable('bpos_sig', shape=self._dimState, initializer=tf.zeros_initializer)
+
+    """
+    setGen: setting the generative models.
+    """
+    def setGen(self):
+        self._train = False
+
+    def setTrain(self):
+        self._train = True
 
     """
     __call__:
@@ -559,11 +560,11 @@ input: x - a placeholder that indicates the input data. [batch, step, frame]
 def buildSRNN(
         x,
         graph,
-        Config=configSRNN(),
+        Config,
 ):
     with graph.as_default():
         # define the variational cell of VRNN
-        MLPx = MLP(Config.init_scale, Config.dimInput, Config.dimMLPx, Config.mlpType)
+        MLPx = MLP(Config.init_scale, Config.dimIN, Config.dimMLPx, Config.mlpType)
         with tf.variable_scope("forwardCell"):
             forwardCell = buildRec(Config.dimRecD, Config.recType, Config.init_scale)  # the hidden layer part of the recognition model.
             # run the forward recurrent layers to compute the deterministic transition.
@@ -579,7 +580,7 @@ def buildSRNN(
                 a_t, _ = tf.nn.dynamic_rnn(backwardCell, tf.reverse(tf.concat(axis=-1, values=(d_t, x)), [1]), initial_state=state)
                 a_t = tf.reverse(a_t, [1])
             elif Config.mode == 'filter':
-                backwardCell = MLP(Config.init_scale, Config.dimRecD[-1] + Config.dimInput,
+                backwardCell = MLP(Config.init_scale, Config.dimRecD[-1] + Config.dimIN,
                                    Config.dimRecA, Config.mlpType)
                 a_t = backwardCell(tf.concat(axis=-1, values=(d_t, x)))
             else:
@@ -589,4 +590,4 @@ def buildSRNN(
         SSM = stoCell(Config)
         state = SSM.zero_state(tf.shape(x)[0], dtype=tf.float32)
         (prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, z), _ = tf.nn.dynamic_rnn(SSM, tf.concat(axis=-1, values=(d_t, a_t)), initial_state=state)
-        return prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, z
+        return prior_mu, prior_sig, pos_mu, pos_sig, hidden_dec, [forwardCell, SSM, MLPx], z

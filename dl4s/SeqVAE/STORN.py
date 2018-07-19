@@ -57,6 +57,8 @@ class _STORN(_model, object):
             self._train_step = None
             # <pass> the output of the recognition model.
             self._regOut = [self._muZ, self._sigZ]
+            # using the E(Z|X) as extracted feature.
+            self._feature = self._muZ
             # <pass> the output of P(X|Z) given Z ~ P(Z|X) will be define in the children classes.
             self._allgenOut = None
             # <pass> the output of P(X|Z) given Z ~ N(0,1) will be define in the children classes.
@@ -158,7 +160,6 @@ class gaussSTORN(_STORN, object):
             self._loss += GaussNLL(self.x[:, 1:, :], mu, std**2)
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
             self._train_step = self._optimizer.minimize(tf.cast(tf.shape(self.x), tf.float32)[-1] * self._loss)
-            # TODO: define iteration for reconstruction.
             """define the process to generate samples."""
             # the initial state and initial input of the RNN.
             state = self._Cell.zero_state(1, dtype=tf.float32)
