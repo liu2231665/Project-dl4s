@@ -126,7 +126,7 @@ class _model(object):
                 else:
                     saver.restore(self._sess, loadPath)
         except:
-            print("\x1b[1;91mcontinue the program...\x1b[0m")
+            print("\x1b[1;91mNo saved model is given. Initiate the model randomly...\x1b[0m")
         return
 
     """#########################################################################

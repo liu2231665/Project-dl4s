@@ -48,8 +48,6 @@ class _RBM(object):
             scope=None,
             k=1
     ):
-        # <Tensorflow Session>.
-        self._sess = tf.Session()
         # the proposal distribution.
         self._k = k
         # Check whether the configuration is correct.
@@ -79,8 +77,6 @@ class _RBM(object):
             # if the RBM component is used to build sequential models like RNN-RBM, the input x should be provided as
             # x = [batch, frame]. O.w, we define it as non-temporal data with shape [batch,frame].
             self._V = x if x is not None else tf.placeholder(dtype=tf.float32, shape=[None, dimV], name='V')
-            # <tensor placeholder> learning rate.
-            self.lr = tf.placeholder(dtype='float32', shape=(), name='learningRate')
 
     """#########################################################################
     sampleHgivenV: the inference direction of the RBM.
@@ -124,7 +120,7 @@ class _RBM(object):
             newV, Pv_h = self.sampleVgivenH(newH, beta)
             if newV is None:
                 raise ValueError("You have not yet define the sampleVgivenH!!")
-        return newV, newH, Ph_v, Pv_h
+        return newV, newH, Pv_h, Ph_v
 
     """#########################################################################
     FreeEnergy: the free energy function.
@@ -154,7 +150,7 @@ class _RBM(object):
         return posPhase - negPhase
 
     """#########################################################################
-    _ais_term: compute the ais term of te partition function 
+    _ais_term: compute the ais term of the partition function 
                by annealed importance sampling.
     input: run - the number of samples.
            levels - the number of intermediate proposals.
@@ -236,10 +232,9 @@ class binRBM(_RBM, object):
         with tf.variable_scope(self._scopeName, initializer=initializer):
             # pll.
             self.newV, self.newH, self.muV, self.muH = self.GibbsSampling(self._V, k=k)
-            self._pll = dimV * BernoulliNLL(self._V, self.muV)
+            self._monitor = BernoulliNLL(self._V, self.muV)
             # one step sample.
-            self.newV0, self.newH0, self.muH0, self.muV0 = \
-                self.GibbsSampling(self._V, k=1)
+            self.newV0, self.newH0, self.muH0, self.muV0 = self.GibbsSampling(self._V, k=1)
 
     """#########################################################################
     sampleVgivenH: the generative direction of the RBM.
@@ -279,6 +274,19 @@ class binRBM(_RBM, object):
         logZA = tf.reduce_sum(tf.nn.softplus(self._bv), axis=-1) + \
                 tf.reduce_sum(tf.nn.softplus(self._bh), axis=-1)
         return logZA + self._ais_term(run, levels, Batch, Seq)
+
+    """
+    __call__:
+    input: xt - the current input with size (batch, frame).
+           state - the previous state of the cells. [newH, hidden, rnnstate]
+           scope - indicate the variable scope.
+    output: 
+    """
+    def __call__(self, xt, bvt, bht, k):
+        self._bh = bht
+        self._bv = bvt
+        newV, newH, muV, muH = self.GibbsSampling(xt, k=k)
+        return newV, newH, muV, muH
 
 
 """#########################################################################
@@ -330,8 +338,7 @@ class gaussRBM(_RBM, object):
             self.newV, self.newH, self.muV, self.muH = self.GibbsSampling(self._V, k=k)
             self._monitor = tf.reduce_mean(tf.reduce_sum((self._V - self.muV)**2, axis=[-1]))
             # one step sample.
-            self.newV0, self.newH0, self.muH0, self.muV0 = \
-                self.GibbsSampling(self._V, k=1)
+            self.newV0, self.newH0, self.muH0, self.muV0 = self.GibbsSampling(self._V, k=1)
 
     """#########################################################################
     sampleHgivenV: the inference direction of the RBM.
@@ -386,13 +393,26 @@ class gaussRBM(_RBM, object):
                 tf.reduce_sum(tf.nn.softplus(self._bh), axis=-1)
         return logZA + self._ais_term(run, levels, Batch, Seq)
 
+    """
+    __call__:
+    input: xt - the current input with size (batch, frame).
+           state - the previous state of the cells. [newH, hidden, rnnstate]
+           scope - indicate the variable scope.
+    output: 
+    """
+    def __call__(self, xt, bvt, bht, k):
+        self._bh = bht
+        self._bv = bvt
+        newV, newH, muV, muH = self.GibbsSampling(xt, k=k)
+        return newV, newH, muV, muH
 
 
+# TODO --------------------------------------------------------------------
 """#########################################################################
 Class: mu_ssRBM - the mu-pooled spike and slab Restricted Boltzmann Machine 
                   for continuous observations.
 #########################################################################"""
-class mu_ssRBM(object):
+class mu_ssRBM(_RBM, object):
     """#########################################################################
     __init__:the initialization function.
     input: dimV - the frame dimension of the input vector.
@@ -415,7 +435,9 @@ class mu_ssRBM(object):
            phi - the precision parameter of V modulated by H.
            phiTrain - indicate whether train phi or set as hyper parameter.
            scope - using to define the variable_scope.
+           bound - restrict the bound of samples.
            k - Gibbs sampling steps.
+           CGRNN - Check whether this model is used in CGRNN.
     output: None.
     #########################################################################"""
     def __init__(
@@ -440,7 +462,6 @@ class mu_ssRBM(object):
             k=1,
             CGRNN=False
     ):
-        self._sess = tf.Session()
         # the proposal distribution.
         self._k = k
         #
@@ -710,8 +731,7 @@ class mu_ssRBM(object):
     """
     __call__:
     input: xt - the current input with size (batch, frame).
-           state - the previous state of the cells. [newH, hidden, rnnstate]
-           scope - indicate the variable scope.
+           .
     output: 
     """
     def __call__(self, xt, bht, bvt, gammat, k):

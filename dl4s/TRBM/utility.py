@@ -5,8 +5,12 @@ Descriptions: the file contains the utility of RBM including Gibbs sampling,
               annealed importance sampling.
               ----2017.11.03
 #########################################################################"""
+from dl4s.cores.model import _config
 
-class configRNNRBM:
+"""#########################################################################
+Class: configRNNRBM - Basic setting of the RNN-RBM models. 
+#########################################################################"""
+class configRNNRBM(_config):
     aisRun = 100        # <scalar> the number of samples of AIS.
     aisLevel = 10       # <scalar> the number of intermediate proposal distributions of AIS.
     Gibbs = 15          # <scalar> the steps of Gibbs sampling.
@@ -14,17 +18,12 @@ class configRNNRBM:
     mlpType = 'relu'
     dimMlp = []
     dimRec = []
-    dimInput = 100      # <scalar> the size of frame of the input.
     dimState = 100      # <scalar> the size of the stochastic layer.
-    init_scale = 0.01   # <scalar> the initialized scales of the weight.
-    float = 'float32'   # <string> the type of float.
-    Opt = 'SGD'         # <string> the optimization method.
-    savePath = None     # <string/None> the path to save the model.
-    eventPath = None    # <string/None> the path to save the events for visualization.
-    loadPath = None     # <string/None> the path to load the model.
 
 
-
+"""#########################################################################
+Class: configssRNNRBM - Basic setting of the RNN-ssRBM models. 
+#########################################################################"""
 class configssRNNRBM(configRNNRBM):
     W_Norm = True
     alphaTrain = True

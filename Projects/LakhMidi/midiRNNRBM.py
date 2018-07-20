@@ -8,7 +8,7 @@ Descriptions: the code to train and run the binRNNRBM from dl4s.TRBM
 from Projects.LakhMidi.fetchData import fetchData
 from dl4s import binRnnRBM, binSRNN
 from dl4s import configRNNRBM as Config
-from dl4s import configSRNN, full_train
+from dl4s import configSRNN
 from Projects.LakhMidi.accTool import accRBM
 import os
 
@@ -18,7 +18,7 @@ Config.aisLevel = 5000
 Config.aisRun = 200
 Config.dimRec = [500]
 Config.dimMlp = [400, 400]
-Config.dimInput = 128
+Config.dimIN = 128
 Config.dimState = 500
 Config.init_scale = 0.01
 Config.Gibbs = 1
@@ -41,7 +41,7 @@ if __name__ == '__main__':
         # Build the model and prepare the data-set.
         Dataset = fetchData()
         RnnRbm = binRnnRBM(Config)
-        full_train(model=RnnRbm, dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.1,
+        RnnRbm.full_train(dataset=Dataset, maxEpoch=300, batchSize=125, earlyStop=10, learning_rate=0.1,
                           valid_batchSize=25, saveto=SAVETO)
 
     if Flag == 'evaluation':
