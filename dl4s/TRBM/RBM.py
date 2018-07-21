@@ -407,7 +407,6 @@ class gaussRBM(_RBM, object):
         return newV, newH, muV, muH
 
 
-# TODO --------------------------------------------------------------------
 """#########################################################################
 Class: mu_ssRBM - the mu-pooled spike and slab Restricted Boltzmann Machine 
                   for continuous observations.
@@ -458,34 +457,19 @@ class mu_ssRBM(_RBM, object):
             phi=None,
             phiTrain=False,
             scope=None,
-            bound=[-25.0, 25.0],
+            bound=(-25.0, 25.0),
             k=1,
             CGRNN=False
     ):
-        # the proposal distribution.
-        self._k = k
+        # initialize its parent first.
+        super().__init__(dimV, dimH, init_scale, x, W, bv, bh, scope, k)
         #
+        self._dimS = dimS if dimS is not None else dimH
+        # Restrict the value of generated or reconstruted samples.
         self._bound = bound
         # Check whether the configuration is correct.
-        if x is not None and x.shape[-1] != dimV:
-            raise ValueError("You have provided a input tensor but the last shape is not equal to [dimV]!!")
-        if W is not None and (W.shape[0] != dimV or W.shape[1] != dimH):
-            raise ValueError("You have provided a W tensor but the shape is not equal to [dimV, dimH]!!")
-        if bv is not None and bv.shape[-1] != dimV:
-            raise ValueError("You have provided a bv tensor but the last shape is not equal to [dimV]!!")
-        if bh is not None and bh.shape[-1] != dimH:
-            raise ValueError("You have provided a bh tensor but the last shape is not equal to [dimH]!!")
         if phi is not None and (phi.shape[0] != dimH or phi.shape[1] != dimV):
             raise ValueError("You have provided a phi tensor but the shape is not equal to [dimH, dimV]!!")
-
-        self._dimV = dimV
-        self._dimH = dimH
-        self._dimS = dimS if dimS is not None else dimH
-        if scope is None:
-            self._scopeName = 'ssRBM'
-        else:
-            self._scopeName = scope
-        #
         if gamma is not None and gamma.shape[-1] != self._dimV:
             raise ValueError("You have provided a gamma tensor but the last shape is not equal to [dimV]!!")
         if alpha is not None and alpha.shape[-1] != self._dimS:
@@ -496,13 +480,10 @@ class mu_ssRBM(_RBM, object):
         # create the system parameters.
         initializer = tf.random_uniform_initializer(-init_scale, init_scale)
         with tf.variable_scope(self._scopeName, initializer=initializer):
-            #
-            self._W = W if W is not None else tf.get_variable('W', shape=[dimV, dimH])
-            self._bv = bv if bv is not None else tf.get_variable('bv', shape=dimV, initializer=tf.zeros_initializer)
-            self._bh = bh if bh is not None else tf.get_variable('bh', shape=dimH, initializer=tf.zeros_initializer)
-            #
+            # define gamma of ssRBM.
             self._gamma = gamma if gamma is not None else \
                 tf.nn.softplus(tf.get_variable('gamma', shape=self._dimV, initializer=tf.zeros_initializer))
+            # define alpha of ssRBM by either given variable, creating trainable variable or constant.
             if alpha is not None:
                 self._alpha = alpha
             else:
@@ -511,7 +492,7 @@ class mu_ssRBM(_RBM, object):
                                                              initializer=tf.zeros_initializer))
                 else:
                     self._alpha = tf.ones(shape=self._dimS, name='alpha')
-            #
+            # define mu of ssRBM by either given variable, creating trainable variable or constant.
             if mu is not None:
                 self._mu = mu
             else:
@@ -519,7 +500,7 @@ class mu_ssRBM(_RBM, object):
                     self._mu = tf.get_variable('mu', shape=self._dimS, initializer=tf.zeros_initializer)
                 else:
                     self._mu = tf.zeros(shape=self._dimS, name='mu')
-            #
+            # define phi of ssRBM by either given variable, creating trainable variable or constant.
             if phi is not None:
                 self._phi = phi
             else:
@@ -530,12 +511,10 @@ class mu_ssRBM(_RBM, object):
             # if it's used in CGRNN, don't create this part of graph.
             if CGRNN:
                 return
-            # x = [batch, steps, dimV]. O.w, we define it as non-temporal data with shape [batch,dimV].
-            self._V = x if x is not None else tf.placeholder(dtype=tf.float32, shape=[None, dimV], name='V')
-            # <tensor placeholder> learning rate.
-            self.lr = tf.placeholder(dtype='float32', shape=(), name='learningRate')
-            self.newV, self.newH, self.newS, self.muV, self.muH, self.muS = \
-                self.GibbsSampling(self._V, k=k)
+            self.newV, self.newH, self.newS, self.muV, self.muH, self.muS = self.GibbsSampling(self._V, k=k)
+            # one step sample.
+            self.newV0, self.newH0, self.newS0, self.muV0, self.muH0, self.muS0 = self.GibbsSampling(self._V, k=1)
+            """Define the expression of conditional convariance and precision."""
             newH = tf.expand_dims(self.newH, axis=2)
             W = tf.expand_dims(tf.expand_dims(self._W, axis=0), axis=0)
             term1 = newH * W / (self._alpha + 1e-8)
@@ -547,9 +526,6 @@ class mu_ssRBM(_RBM, object):
             self.CovV_h = tf.matrix_inverse(self.PreV_h)
             # define the monitor.
             monitor = tf.reduce_sum((self._V - self.muV) ** 2, axis=-1)
-            # one step sample.
-            self.newV0, self.newH0, self.newS0, self.muV0, self.muH0, self.muS0 = \
-                self.GibbsSampling(self._V, k=1)
             self._monitor = tf.sqrt(tf.reduce_mean(monitor))
             #self._monitor = muV
 
@@ -734,19 +710,20 @@ class mu_ssRBM(_RBM, object):
            .
     output: 
     """
-    def __call__(self, xt, bht, bvt, gammat, k):
+    def __call__(self, xt, bht, k, **kwargs):
         self._bh = bht
-        self._bv = bvt
-        self._gamma = gammat
+        if 'bvt' in kwargs:
+            self._bv = kwargs['bvt']
+        if 'gammat' in kwargs:
+            self._gamma = kwargs['gammat']
         newV, newH, newS, muV, muH, muS = self.GibbsSampling(xt, k=k)
         return newV, newH, newS, muV, muH, muS
-
 
 """#########################################################################
 Class: bin_ssRBM - the mu-pooled spike and slab Restricted Boltzmann Machine 
                   for binary observations.
 #########################################################################"""
-class bin_ssRBM(object):
+class bin_ssRBM(_RBM, object):
     """#########################################################################
     __init__:the initialization function.
     input: dimV - the frame dimension of the input vector.
@@ -788,26 +765,10 @@ class bin_ssRBM(object):
             k=1,
             CGRNN=False
     ):
-        self._sess = tf.Session()
-        # the proposal distribution.
-        self._k = k
-        # Check whether the configuration is correct.
-        if x is not None and x.shape[-1] != dimV:
-            raise ValueError("You have provided a input tensor but the last shape is not equal to [dimV]!!")
-        if W is not None and (W.shape[0] != dimV or W.shape[1] != dimH):
-            raise ValueError("You have provided a W tensor but the shape is not equal to [dimV, dimH]!!")
-        if bv is not None and bv.shape[-1] != dimV:
-            raise ValueError("You have provided a bv tensor but the last shape is not equal to [dimV]!!")
-        if bh is not None and bh.shape[-1] != dimH:
-            raise ValueError("You have provided a bh tensor but the last shape is not equal to [dimH]!!")
-
-        self._dimV = dimV
-        self._dimH = dimH
+        # initialize its parent first.
+        super().__init__(dimV, dimH, init_scale, x, W, bv, bh, scope, k)
+        #
         self._dimS = dimS if dimS is not None else dimH
-        if scope is None:
-            self._scopeName = 'ssRBM'
-        else:
-            self._scopeName = scope
         #
         if alpha is not None and alpha.shape[-1] != self._dimS:
             raise ValueError("You have provided a alpha tensor but the last shape is not equal to [dimS]!!")
@@ -816,11 +777,7 @@ class bin_ssRBM(object):
         # create the system parameters.
         initializer = tf.random_uniform_initializer(-init_scale, init_scale)
         with tf.variable_scope(self._scopeName, initializer=initializer):
-            #
-            self._W = W if W is not None else tf.get_variable('W', shape=[dimV, dimH])
-            self._bv = bv if bv is not None else tf.get_variable('bv', shape=dimV, initializer=tf.zeros_initializer)
-            self._bh = bh if bh is not None else tf.get_variable('bh', shape=dimH, initializer=tf.zeros_initializer)
-            #
+            # define alpha of ssRBM by either given variable, creating trainable variable or constant.
             if alpha is not None:
                 self._alpha = alpha
             else:
@@ -829,7 +786,7 @@ class bin_ssRBM(object):
                                                          initializer=tf.zeros_initializer))
                 else:
                     self._alpha = tf.ones(shape=self._dimS, name='alpha')
-            #
+            # define mu of ssRBM by either given variable, creating trainable variable or constant.
             if mu is not None:
                 self._mu = mu
             else:
@@ -841,17 +798,11 @@ class bin_ssRBM(object):
             if CGRNN:
                 return
 
-            # x = [batch, steps, dimV]. O.w, we define it as non-temporal data with shape [batch,dimV].
-            self._V = x if x is not None else tf.placeholder(dtype=tf.float32, shape=[None, dimV], name='V')
-            # <tensor placeholder> learning rate.
-            self.lr = tf.placeholder(dtype='float32', shape=(), name='learningRate')
-            self.newV, self.newH, self.newS, self.muV, self.muH, self.muS = \
-                self.GibbsSampling(self._V, k=k)
-            # define the monitor.
-            self._monitor = BernoulliNLL(self._V, self.muV) * dimV
+            self.newV, self.newH, self.newS, self.muV, self.muH, self.muS = self.GibbsSampling(self._V, k=k)
             # one step sample.
-            self.newV0, self.newH0, self.newS0, self.muV0, self.muH0, self.muS0 = \
-                self.GibbsSampling(self._V, k=1)
+            self.newV0, self.newH0, self.newS0, self.muV0, self.muH0, self.muS0 = self.GibbsSampling(self._V, k=1)
+            # define the monitor.
+            self._monitor = BernoulliNLL(self._V, self.muV)
 
     """#########################################################################
     sampleSgivenVH: the other inference direction of the RBM by P(S|V, H).
@@ -1024,8 +975,10 @@ class bin_ssRBM(object):
            scope - indicate the variable scope.
     output: 
     """
-    def __call__(self, xt, bht, bvt, k):
+    def __call__(self, xt, bht, k, **kwargs):
         self._bh = bht
-        self._bv = bvt
+        if 'bvt' in kwargs:
+            self._bv = kwargs['bvt']
+        self._bh = bht
         newV, newH, newS, muV, muH, muS = self.GibbsSampling(xt, k=k)
         return newV, newH, newS, muV, muH, muS

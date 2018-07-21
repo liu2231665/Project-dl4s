@@ -18,14 +18,14 @@ if __name__ == '__main__':
     Config.Opt = 'Adam'
     Config.dimRec = [100]
     Config.dimMlp = [100, 100]
-    Config.dimInput = 50
+    Config.dimIN = 50
     Config.dimState = 100
     Config.init_scale = 0.01
     Config.Gibbs = 1
     Config.aisLevel = 20
     Config.aisRun = 20
     Config.W_Norm = True
-    Config.savePath = './RNNRBM/my-model'
+    Config.savePath = None
 
     """
     test training and model operation.
@@ -36,22 +36,22 @@ if __name__ == '__main__':
     """
     test precision and covariance operation.
     """
-    pre = RNNRBM.cov_function(X)
-    cov = RNNRBM.pre_function(X)
+    pre = RNNRBM.convariance(X)
+    cov = RNNRBM.precision(X)
     print(RNNRBM.ais_function(X))
 
     """
     test the generating sample.
     """
     print("The valid RMSE is %f." % RNNRBM.val_function(input=X))
-    samples = RNNRBM.gen_function(numSteps=40)
+    samples = RNNRBM.generate(numSteps=40)
     plt.figure(1)
     plt.imshow(samples, cmap='jet')
     """
     test the encoder model.
     """
     plt.figure(2)
-    mu= RNNRBM.hidden_function(X)
+    mu= RNNRBM.embed(X)
     plt.imshow(mu[0, :, :], cmap='jet')
     plt.figure(3)
     plt.imshow(pre[0, 5, :, :], cmap='jet')
@@ -67,5 +67,5 @@ if __name__ == '__main__':
     X['valid'] = np.random.binomial(1, 0.5, size=(130, 25, 50))
     X['test'] = np.random.binomial(1, 0.5, size=(130, 25, 50))
     RNNRBM.full_train(dataset=X, maxEpoch=5, earlyStop=10, batchSize=125, valid_batchSize=25, learning_rate=0.001,
-                    saveto='./RNNRBM/results.npz')
+                    saveto=None)
 

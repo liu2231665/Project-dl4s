@@ -29,3 +29,4 @@ class configssRNNRBM(configRNNRBM):
     alphaTrain = True
     muTrain = True
     phiTrain = True
+    Bound = (-25.0, 25.0)

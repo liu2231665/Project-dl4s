@@ -189,7 +189,7 @@ class _model(object):
     """#########################################################################
     embed: return extracted feature/descriptor/representation of data.
     #########################################################################"""
-    def embed(self, input):
+    def embed(self, input, *args, **kwargs):
         # if the input is not in batch format, reshape it.
         if len(input.shape) == 2:
             input = input.reshape([-1, input.shape[0], input.shape[1]])
@@ -197,7 +197,13 @@ class _model(object):
             input = input.reshape([-1, 1, input.shape[0]])
         #
         with self._graph.as_default():
-            return self._sess.run(self._feature, feed_dict={self.x: input})
+            class_type = self.__class__.__name__
+            # if ssRBM is included in the model. There is an alternative sparse feature.
+            if (class_type == "ssRNNRBM" or class_type == "binssRNNRBM") \
+                    and ('sparse' in args or 'sparse' in kwargs):
+                return self._sess.run(self._sparse_feature, feed_dict={self.x: input})
+            else:
+                return self._sess.run(self._feature, feed_dict={self.x: input})
 
     """#########################################################################
     generate: generate sample sequence with the length as numSteps.
