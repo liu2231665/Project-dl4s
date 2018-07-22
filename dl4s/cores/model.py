@@ -167,9 +167,24 @@ class _model(object):
             print("\x1b[1;91mNo path is provided to save events. continue the program...\x1b[0m")
         return
 
-    # TODO:
-    def impaint(self, input, mask):
-        pass
+    # TODO: I don't test the impaint function exactly.
+    # TODO: Also, both impaint() and reconstruct() use noise-free output.
+    """#########################################################################
+    impaint: impaint time series with missing data.
+    #########################################################################"""
+    def impaint(self, input, *args, **kwargs):
+        # replace nan with 0.
+        notNaN = 1.0 - np.isnan(input).astype(dtype=np.float32)
+        output = self.reconstruct(np.nan_to_num(input))
+        if 'fillNaN' in args:
+            output = output * (1.0 - notNaN) + input * notNaN
+        if 'fillInf' in args:
+            notInf = 1.0 - np.isinf(input).astype(dtype=np.float32)
+            output = self.reconstruct(np.nan_to_num(output) * notInf) * (1.0 - notInf) + input * notInf
+        if 'mask' in kwargs:
+            mask = kwargs['mask']
+            output = self.reconstruct(output * mask) * (1.0 - mask) + output * mask
+        return output
 
     """#########################################################################
     reconstruct: reconstruction the noise-free version of data.
@@ -205,6 +220,7 @@ class _model(object):
             else:
                 return self._sess.run(self._feature, feed_dict={self.x: input})
 
+    # TODO: define a Gibbs_generate() for RNN-RBM and CGRNN.
     """#########################################################################
     generate: generate sample sequence with the length as numSteps.
     #########################################################################"""
