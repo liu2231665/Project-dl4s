@@ -41,15 +41,14 @@ input: init_scale - the initial scale.
        dimFor - the dimensions of layers in MLP.
 #########################################################################"""
 class MLP(object):
-    def __init__(self, init_scale, dimInput, dimFor=[], unitType='relu'):
+    def __init__(self, init_scale, dimInput, dimFor=(), unitType='relu'):
         self._dimInput = dimInput
         self._dimFor = dimFor
         self._dimOutput = self._dimInput if len(self._dimFor) == 0 else self._dimFor[-1]
         self._unitType = unitType
-        self._init_scale = init_scale
         self._W = []
         self._b = []
-        initializer = tf.random_uniform_initializer(-self._init_scale, self._init_scale)
+        initializer = tf.random_uniform_initializer(-init_scale, init_scale)
         for l in range(len(self._dimFor)):
             if l == 0:
                 self._W.append(tf.get_variable('W'+str(l), shape=(self._dimInput, self._dimFor[l])))
@@ -98,7 +97,7 @@ class configSTORN(_config, object):
     unitType = 'LSTM'           # <string> the type of hidden units(LSTM/GRU/Tanh).
     dimGen = []                 # <scalar list> the size of hidden layers in generating model.
     dimReg = []                 # <scalar list> the size of hidden layers in recognition model.
-    dimState = 100                # <scalar> the size of the stochastic layer.
+    dimState = None                # <scalar> the size of the stochastic layer.
 
 """#########################################################################
 Class: stornCell - Basic step of the STORN models. 
@@ -114,9 +113,8 @@ class stornCell(tf.contrib.rnn.RNNCell):
         self._dimGen = configSTORN.dimGen           # the dimension of each layer in generating model.
         self._dimReg = configSTORN.dimReg           # the dimension of each layer in recognition model.
         self._unitType = configSTORN.unitType       # the type of units for recurrent layers.
-        self._init_scale = configSTORN.init_scale   # the initialized scale for the model.
-        self.hiddenReg = buildRec(self._dimReg, self._unitType, self._init_scale)    # the hidden layer part of the recognition model.
-        self.hiddenGen = buildRec(self._dimGen, self._unitType, self._init_scale)    # the hidden layer part of the generating model.
+        self.hiddenReg = buildRec(self._dimReg, self._unitType, configSTORN.init_scale)    # the hidden layer part of the recognition model.
+        self.hiddenGen = buildRec(self._dimGen, self._unitType, configSTORN.init_scale)    # the hidden layer part of the generating model.
         #
         self._train = train
 
@@ -230,7 +228,7 @@ class configVRNN(_config, object):
     dimForZ = []                # <scalar list> the size of feedforward hidden layers of stochastic layer.
     dimForEnc = []              # <scalar list> the size of feedforward hidden layers in the encoder.
     dimForDec = []              # <scalar list> the size of feedforward hidden layers in the decoder.
-    dimState = 100              # <scalar> the size of the stochastic layer.
+    dimState = None              # <scalar> the size of the stochastic layer.
 
 """#########################################################################
 Class: varCell - the variational cell of the VRNN models. 
@@ -252,13 +250,12 @@ class varCell(tf.contrib.rnn.RNNCell):
         self._dimMLPdec = config.dimForDec
         self._recType = config.recType              # the type of units for recurrent layers.
         self._mlpType = config.mlpType              # the type of units for recurrent layers.
-        self._init_scale = config.init_scale        # the initialized scale for the model.
         # the feedforward network of input X.
         with tf.variable_scope('mlpx'):
-            self._mlpx = MLP(init_scale=self._init_scale, dimInput=self._dimInput, dimFor=self._dimMLPx)
+            self._mlpx = MLP(init_scale=config.init_scale, dimInput=self._dimInput, dimFor=self._dimMLPx)
         # the feedforward network of state Z.
         with tf.variable_scope('mlpz'):
-            self._mlpz = MLP(init_scale=self._init_scale, dimInput=self._dimState, dimFor=self._dimMLPz)
+            self._mlpz = MLP(init_scale=config.init_scale, dimInput=self._dimState, dimFor=self._dimMLPz)
         # the feedforward network for encoder.
         temp = self._dimRec[-1]
         if len(self._dimMLPx) != 0:
@@ -267,7 +264,7 @@ class varCell(tf.contrib.rnn.RNNCell):
             temp += self._dimInput
 
         with tf.variable_scope('mlpEnc'):
-            self._mlpEnc = MLP(init_scale=self._init_scale, dimInput=temp, dimFor=self._dimMLPenc)
+            self._mlpEnc = MLP(init_scale=config.init_scale, dimInput=temp, dimFor=self._dimMLPenc)
         # the feedforward network for decoder.
         temp = self._dimRec[-1]
         if len(self._dimMLPz) != 0:
@@ -276,13 +273,13 @@ class varCell(tf.contrib.rnn.RNNCell):
             temp += self._dimState
 
         with tf.variable_scope('mlpDec'):
-            self._mlpDec = MLP(init_scale=self._init_scale, dimInput=temp, dimFor=self._dimMLPdec)
+            self._mlpDec = MLP(init_scale=config.init_scale, dimInput=temp, dimFor=self._dimMLPdec)
         # the recurrent network.
-        self._rnn = buildRec(self._dimRec, self._recType, self._init_scale)
+        self._rnn = buildRec(self._dimRec, self._recType, config.init_scale)
         #
         self._train = train
         #
-        initializer = tf.random_uniform_initializer(-self._init_scale, self._init_scale)
+        initializer = tf.random_uniform_initializer(-config.init_scale, config.init_scale)
         with tf.variable_scope('prior', initializer=initializer):
             self._Wp_mu = tf.get_variable('Wp_mu', shape=(self._dimRec[-1], self._dimState))
             self._bp_mu = tf.get_variable('bp_mu', shape=self._dimState, initializer=tf.zeros_initializer)
@@ -342,13 +339,12 @@ class varCell(tf.contrib.rnn.RNNCell):
         else:
             h_tm1 = state[-1]
         # Compute the prior.
-        initializer = tf.random_uniform_initializer(-self._init_scale, self._init_scale)
-        with tf.variable_scope('prior', initializer=initializer):
+        with tf.variable_scope('prior'):
             # compute the mean and variance of P(Z) based on h_{t-1}
             prior_mu = tf.tensordot(h_tm1, self._Wp_mu, [[-1], [0]]) + self._bp_mu
             prior_sig = tf.nn.softplus(tf.tensordot(h_tm1, self._Wp_sig, [[-1], [0]]) + self._bp_sig) + 1e-8
         # Compute the encoder.
-        with tf.variable_scope('encoder', initializer=initializer):
+        with tf.variable_scope('encoder'):
             xx = self._mlpx(x)
             hidden_enc = self._mlpEnc(tf.concat(axis=1, values=(xx, h_tm1)))
             # compute the mean and variance of the posterior P(Z|X).
@@ -363,7 +359,7 @@ class varCell(tf.contrib.rnn.RNNCell):
         else:
             z = prior_mu + prior_sig * eps
         # Compute the decoder.
-        with tf.variable_scope('decoder', initializer=initializer):
+        with tf.variable_scope('decoder'):
             zz = self._mlpz(z)
             hidden_dec = self._mlpDec(tf.concat(axis=1, values=(zz, h_tm1)))
         # Update the state.
@@ -427,7 +423,7 @@ class configSRNN(_config, object):
     dimEnc = []
     dimDec = []
     dimMLPx = []                # <scalar list> the size of MLP of X.
-    dimState = 100              # <scalar> the size of the stochastic layer.
+    dimState = None              # <scalar> the size of the stochastic layer.
 
 """#########################################################################
 Class: stoCell - the stochastic cell of the SRNN models. 

@@ -18,7 +18,7 @@ class configRNNRBM(_config):
     mlpType = 'relu'
     dimMlp = []
     dimRec = []
-    dimState = 100      # <scalar> the size of the stochastic layer.
+    dimState = None      # <scalar> the size of the stochastic layer.
 
 
 """#########################################################################

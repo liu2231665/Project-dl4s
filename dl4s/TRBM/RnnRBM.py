@@ -472,7 +472,6 @@ class ssRNNRBM(_RnnRBM, object):
                 loss_value = np.mean(FEofInput + logZ)
         return loss_value
 
-# TODO --------------------------------------------------------------------
 """#########################################################################
 Class: binssRNNRBM - the RNNRBM model for stochastic binary inputs
                      with spike-and-slab RBM components.

@@ -164,7 +164,7 @@ class _model(object):
                 Writer.flush()
                 Writer.close()
         except:
-            print("\x1b[1;91mcontinue the program...\x1b[0m")
+            print("\x1b[1;91mNo path is provided to save events. continue the program...\x1b[0m")
         return
 
     # TODO:

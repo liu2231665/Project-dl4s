@@ -6,13 +6,14 @@ Descriptions: the file contains the model description of CGRNN.
 #########################################################################"""
 from .utility import configCGRNN, CGCell
 from dl4s.cores.tools import BernoulliNLL
+from dl4s.cores.model import _model
 import tensorflow as tf
 import numpy as np
 
 """#########################################################################
 Class: _CGRNN - the hyper abstraction of the CGRNN.
 #########################################################################"""
-class _CGRNN(object):
+class _CGRNN(_model, object):
     """#########################################################################
     __init__:the initialization function.
     input: Config - configuration class in ./utility.
@@ -26,21 +27,16 @@ class _CGRNN(object):
         if config.dimRec == []:
             raise (ValueError('The forward recurrent structure is empty!'))
 
-        # <tensor graph> define a default graph.
-        self._graph = tf.Graph()
+        super().__init__(config)
         with self._graph.as_default():
             # <scalar> the steps of Gibbs sampling.
             self._gibbs = config.Gibbs
-            # <tensor placeholder> input.
-            self.x = tf.placeholder(dtype='float32', shape=[None, None, config.dimInput])
-            # <tensor placeholder> learning rate.
-            self.lr = tf.placeholder(dtype='float32', shape=(), name='learningRate')
             # <scalar> the number of samples of AIS.
             self._aisRun = config.aisRun
             # <scalar> the number of intermediate proposal distributions of AIS.
             self._aisLevel = config.aisLevel
             # <scalar> dimensions of input frame.
-            self._dimInput = config.dimInput
+            self._dimInput = config.dimIN
             # <scalar> dimensions of stochastic states.
             self._dimState = config.dimState
             # <scalar list> the size of forward recurrent hidden layers.
@@ -49,65 +45,7 @@ class _CGRNN(object):
             self._dimMlp = config.dimMlp
             # <string> the mode.
             self._mode = config.mode
-            # <scalar list> the size of backward recurrent hidden layers/MLP depended on the mode.
-            self._savePath = config.savePath
-            # <string/None> path to save the events.
-            self._eventPath = config.eventPath
-            # <string/None> path to load the events.
-            self._loadPath = config.loadPath
-            # <list> collection of trainable parameters.
-            self._params = []
-            self._train_step = None
-            self._nll = None
-            self._monitor = None
             self.VAE = None
-            # <Tensorflow Optimizer>.
-            if config.Opt == 'Adadelta':
-                self._optimizer = tf.train.AdadeltaOptimizer(learning_rate=self.lr)
-            elif config.Opt == 'Adam':
-                self._optimizer = tf.train.AdamOptimizer(learning_rate=self.lr)
-            elif config.Opt == 'Momentum':
-                self._optimizer = tf.train.MomentumOptimizer(self.lr, 0.9)
-            elif config.Opt == 'SGD':
-                self._optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.lr)
-            else:
-                raise (ValueError("Config.Opt should be either 'Adadelta', 'Adam', 'Momentum' or 'SGD'!"))
-            # <Tensorflow Session>.
-            self._sess = tf.Session(graph=self._graph)
-
-    """#########################################################################
-    _runSession: initialize the graph or restore from the load path.
-    input: None.
-    output: None.
-    #########################################################################"""
-    def _runSession(self):
-        self._sess.run(tf.global_variables_initializer())
-        if self._loadPath is not None:
-            saver = tf.train.Saver()
-            saver.restore(self._sess, self._loadPath)
-        return
-
-    """#########################################################################
-    train_function: compute the monitor and update the tensor variables.
-    input: input - numerical input.
-           lrate - <scalar> learning rate.
-    output: the reconstruction error.
-    #########################################################################"""
-    def train_function(self, input, lrate):
-        with self._graph.as_default():
-            _, loss_value = self._sess.run([self._train_step, self._monitor],
-                                           feed_dict={self.x: input, self.lr: lrate})
-        return loss_value
-
-    """#########################################################################
-    val_function: compute the validation loss with given input.
-    input: input - numerical input.
-    output: the reconstruction error.
-    #########################################################################"""
-    def val_function(self, input):
-        with self._graph.as_default():
-            loss_value = self._sess.run(self._monitor, feed_dict={self.x: input})
-        return loss_value
 
 """#########################################################################
 Class: binCGRNN - the CGRNN mode for binary input.
@@ -130,17 +68,23 @@ class binCGRNN(_CGRNN, object):
         with self._graph.as_default():
             self.Cell = CGCell(config, inputType='binary')
             state = self.Cell.zero_state(tf.shape(self.x)[0], dtype=tf.float32)
-            (self.newV, self.newH, self.newS, self.muV, self.muH, self.muS,
-             self.bvt, self.bht), _ = tf.nn.dynamic_rnn(self.Cell, self.x, initial_state=state)
+            (self.newV, self.newH, self.newS, self.muV, self.muH, self.muS, bvt, bht), _ = \
+                tf.nn.dynamic_rnn(self.Cell, self.x, initial_state=state)
             # update the RBM's bias with bvt & bht.
-            self.Cell.RBM._bh = self.bht
-            self.Cell.RBM._bv = self.bvt
-            # the training loss is per frame.
-            self._loss = self.Cell.RBM.ComputeLoss(V=self.x, samplesteps=config.Gibbs)
-            self._monitor = BernoulliNLL(self.x, self.muV) * config.dimInput
+            self.Cell.RBM._bh = bht
+            self.Cell.RBM._bv = bvt
+            # one step sample.
+            muV0, muH0, muS0 = self.Cell.RBM.GibbsSampling(self.x, k=1)[-3:]
+            # add the tensor computation of extracted feature.
+            self._outputs = muV0
+            self._feature = muH0
+            self._sparse_feature = muH0 * muS0
+            # the training loss is per bits.
+            Loss = self.Cell.RBM.ComputeLoss(V=self.x, samplesteps=config.Gibbs)
+            self._loss = BernoulliNLL(self.x, self.muV)
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-            self._train_step = self._optimizer.minimize(self._loss)
-            #
+            self._train_step = self._optimizer.minimize(Loss)
+            # Define the components to evaluate the partition function by whether NVIL or AIS.
             if VAE is None:
                 self._logZ = self.Cell.RBM.AIS(self._aisRun, self._aisLevel,
                                            tf.shape(self.x)[0], tf.shape(self.x)[1])
@@ -150,77 +94,29 @@ class binCGRNN(_CGRNN, object):
                 self.VAE = VAE
             else:
                 self._logZ = self._NVIL_VAE(VAE)  # X, logPz_X, logPx_Z, logPz, VAE.x
-                self.xx = tf.placeholder(dtype='float32', shape=[None, None, None, config.dimInput])
+                self.xx = tf.placeholder(dtype='float32', shape=[None, None, None, config.dimIN])
                 self.FEofSample = self.Cell.RBM.FreeEnergy(self.xx)
                 self.FEofInput = self.Cell.RBM.FreeEnergy(self.x)
                 self.VAE = VAE
+            """define the process to generate samples."""
+            state = self.Cell.zero_state(1, dtype=tf.float32)
+            x_ = tf.zeros((1, self._dimInput), dtype='float32')
+            # TensorArray to save the output of the generating.
+            gen_operator = tf.TensorArray(tf.float32, self.sampleLen)
+            # condition and body of while loop (input: i-iteration, xx-RNN input, ss-RNN state)
+            i = tf.constant(0)
+            cond = lambda i, xx, ss, array: tf.less(i, self.sampleLen)
+            #
+            def body(i, xx, ss, array):
+                ii = i + 1
+                (new_xx, _, _, _, _, _, _, _), new_ss = self.Cell(xx, ss, gibbs=1)
+                new_array = array.write(i, new_xx)
+                return ii, new_xx, new_ss, new_array
+
+            gen_operator = tf.while_loop(cond, body, [i, x_, state, gen_operator])[-1]
+            self._gen_operator = gen_operator.concat()
             #
             self._runSession()
-            pass
-
-    """#########################################################################
-    hidden_function: generate the hidden activation of given X represented by
-                     P(H|V).
-    input: input - numerical input.
-           gibbs - the number of gibbs sampling.
-    output: P(H|V).
-    #########################################################################"""
-    def hidden_function(self, input, gibbs=None):
-        # update the RBM's bias with bvt & bht.
-        self.Cell.RBM._bh = self.bht
-        self.Cell.RBM._bv = self.bvt
-        #
-        newV = input
-        with self._graph.as_default():
-            k = gibbs if gibbs is not None else self._gibbs
-            if k == self._gibbs:
-                return self._sess.run(self.muH * self.muS, feed_dict={self.x: newV})
-            else:
-                for i in range(k - 1):
-                    newV = self._sess.run(self.Cell.RBM.newV0, feed_dict={self.x: newV})
-                return self._sess.run(self.Cell.RBM.muH0 * self.Cell.RBM.muS0, feed_dict={self.x: newV})
-
-    """#########################################################################
-    output_function: return the conditional mean of the visible layer.
-    input: input - numerical input.
-    output: P(V|parents).
-    #########################################################################"""
-    def output_function(self, input):
-        with self._graph.as_default():
-            return self._sess.run(self.muV, feed_dict={self.x: input})
-
-    """#########################################################################
-    gen_function: generate samples.
-    input: numSteps - the length of the sample sequence.
-           gibbs - the number of gibbs sampling.
-    output: should be the sample.
-    #########################################################################"""
-    def gen_function(self, x=None, numSteps=None, gibbs=None):
-        newV = x
-        with self._graph.as_default():
-            if x is not None:
-                newV = x
-                k = gibbs if gibbs is not None else self._gibbs
-                if k == self._gibbs:
-                    newV = self._sess.run(self.newV, feed_dict={self.x: newV})
-                else:
-                    for i in range(k):
-                        newV = self._sess.run(self.newV, feed_dict={self.x: newV})
-                #
-            elif numSteps is not None:
-                state = self.Cell.zero_state(1, dtype=tf.float32)
-                newV = []
-                for i in range(numSteps):
-                    x_ = tf.zeros((1, self._dimInput), dtype='float32')
-                    (x_, _, _, _, _, _, _, _), state = self.Cell(x_, state, generative=True, gibbs=gibbs)
-                    newV.append(x_)
-                newV = tf.concat(newV, 0)
-                newV = self._sess.run(newV)
-                #
-            else:
-                raise ValueError("Neither input or numSteps is provided!!")
-
-        return newV if x is None else newV[0]
 
     """#########################################################################
     _NVIL_VAE: generate the graph to compute the NVIL upper bound of log Partition
@@ -285,7 +181,7 @@ class binCGRNN(_CGRNN, object):
                 loss_value = np.asarray(loss_value).mean()
         return loss_value
 
-
+# TODO"
 """#########################################################################
 Class: gaussCGRNN - the CGRNN mode for continuous input.
 #########################################################################"""
@@ -299,7 +195,7 @@ class gaussCGRNN(_CGRNN, object):
     #########################################################################"""
     def __init__(
             self,
-            config=configCGRNN(),
+            config,
             VAE=None
     ):
         super().__init__(config)
@@ -313,13 +209,19 @@ class gaussCGRNN(_CGRNN, object):
             self.Cell.RBM._bh = self.bht
             self.Cell.RBM._bv = self.bvt
             self.Cell.RBM._gamma = self.gamma
+            # one step sample.
+            muV0, muH0, muS0 = self.Cell.RBM.GibbsSampling(self.x, k=1)[-3:]
+            # add the tensor computation of extracted feature.
+            self._outputs = muV0
+            self._feature = muH0
+            self._sparse_feature = muH0 * muS0
             # the training loss is per frame.
-            self._loss = self.Cell.RBM.ComputeLoss(V=self.x, samplesteps=config.Gibbs)
+            Loss = self.Cell.RBM.ComputeLoss(V=self.x, samplesteps=config.Gibbs)
             # define the monitor.
             monitor = tf.reduce_sum((self.x - self.muV) ** 2, axis=-1)
-            self._monitor = tf.sqrt(tf.reduce_mean(monitor))
+            self._loss = tf.sqrt(tf.reduce_mean(monitor))
             self._params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-            self._train_step = self._optimizer.minimize(self._loss)
+            self._train_step = self._optimizer.minimize(Loss)
             # add the computation of precision and covariance matrix of ssRBM.
             newH = tf.expand_dims(self.newH, axis=2)
             W = tf.expand_dims(tf.expand_dims(self.Cell.RBM._W, axis=0), axis=0)
@@ -337,78 +239,30 @@ class gaussCGRNN(_CGRNN, object):
                 self.VAE = VAE
             else:
                 self._logZ = self._NVIL_VAE(VAE)  # X, logPz_X, logPx_Z, logPz, VAE.x
-                self.xx = tf.placeholder(dtype='float32', shape=[None, None, None, config.dimInput])
+                self.xx = tf.placeholder(dtype='float32', shape=[None, None, None, config.dimIN])
                 self.FEofSample = self.Cell.RBM.FreeEnergy(self.xx)
                 self.FEofInput = self.Cell.RBM.FreeEnergy(self.x)
                 self.VAE = VAE
+            """define the process to generate samples."""
+            state = self.Cell.zero_state(1, dtype=tf.float32)
+            x_ = tf.zeros((1, self._dimInput), dtype='float32')
+            # TensorArray to save the output of the generating.
+            gen_operator = tf.TensorArray(tf.float32, self.sampleLen)
+            # condition and body of while loop (input: i-iteration, xx-RNN input, ss-RNN state)
+            i = tf.constant(0)
+            cond = lambda i, xx, ss, array: tf.less(i, self.sampleLen)
+
+            #
+            def body(i, xx, ss, array):
+                ii = i + 1
+                (new_xx, _, _, _, _, _, _, _, _), new_ss = self.Cell(xx, ss, gibbs=1)
+                new_array = array.write(i, new_xx)
+                return ii, new_xx, new_ss, new_array
+
+            gen_operator = tf.while_loop(cond, body, [i, x_, state, gen_operator])[-1]
+            self._gen_operator = gen_operator.concat()
             #
             self._runSession()
-            pass
-
-    """#########################################################################
-    hidden_function: generate the hidden activation of given X represented by
-                     P(H|V).
-    input: input - numerical input.
-           gibbs - the number of gibbs sampling.
-    output: P(H|V).
-    #########################################################################"""
-    def hidden_function(self, input, gibbs=None):
-        # update the RBM's bias with bvt & bht.
-        self.Cell.RBM._bh = self.bht
-        self.Cell.RBM._bv = self.bvt
-        #
-        newV = input
-        with self._graph.as_default():
-            k = gibbs if gibbs is not None else self._gibbs
-            if k == self._gibbs:
-                return self._sess.run(self.muH * self.muS, feed_dict={self.x: newV})
-            else:
-                for i in range(k - 1):
-                    newV = self._sess.run(self.Cell.RBM.newV0, feed_dict={self.x: newV})
-                return self._sess.run(self.Cell.RBM.muH0 * self.Cell.RBM.muS0, feed_dict={self.x: newV})
-
-    """#########################################################################
-    gen_function: generate samples.
-    input: numSteps - the length of the sample sequence.
-           gibbs - the number of gibbs sampling.
-    output: should be the sample.
-    #########################################################################"""
-    def gen_function(self, x=None, numSteps=None, gibbs=None):
-        #
-        newV = x
-        with self._graph.as_default():
-            if x is not None:
-                newV = x
-                k = gibbs if gibbs is not None else self._gibbs
-                if k == self._gibbs:
-                    newV = self._sess.run(self.newV, feed_dict={self.x: newV})
-                else:
-                    for i in range(k):
-                        newV = self._sess.run(self.newV, feed_dict={self.x: newV})
-                        #
-            elif numSteps is not None:
-                state = self.Cell.zero_state(1, dtype=tf.float32)
-                newV = []
-                for i in range(numSteps):
-                    x_ = tf.zeros((1, self._dimInput), dtype='float32')
-                    (x_, _, _, _, _, _, _, _, _), state = self.Cell(x_, state, generative=True, gibbs=gibbs)
-                    newV.append(x_)
-                newV = tf.concat(newV, 0)
-                newV = self._sess.run(newV)
-                #
-            else:
-                raise ValueError("Neither input or numSteps is provided!!")
-
-        return newV if x is None else newV[0]
-
-    """#########################################################################
-    output_function: return the conditional mean of the visible layer.
-    input: input - numerical input.
-    output: P(V|parents).
-    #########################################################################"""
-    def output_function(self, input):
-        with self._graph.as_default():
-            return self._sess.run(self.muV, feed_dict={self.x: input})
 
     """#########################################################################
     ais_function: compute the approximated negative log-likelihood with partition
