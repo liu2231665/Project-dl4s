@@ -134,11 +134,11 @@ class gaussSRNN(_SRNN, object):
         with self._graph.as_default():
             with tf.variable_scope('output'):
                 # compute the mean and standard deviation of P(X|Z).
-                Wdec_mu = tf.get_variable('Wdec_mu', shape=(self._hidden_dec.shape[-1], config.dimInput))
-                bdec_mu = tf.get_variable('bdec_mu', shape=config.dimInput, initializer=tf.zeros_initializer)
+                Wdec_mu = tf.get_variable('Wdec_mu', shape=(self._hidden_dec.shape[-1], config.dimIN))
+                bdec_mu = tf.get_variable('bdec_mu', shape=config.dimIN, initializer=tf.zeros_initializer)
                 mu = tf.tensordot(self._hidden_dec, Wdec_mu, [[-1], [0]]) + bdec_mu
-                Wdec_sig = tf.get_variable('Wdec_sig', shape=(self._hidden_dec.shape[-1], config.dimInput))
-                bdec_sig = tf.get_variable('bdec_sig', shape=config.dimInput, initializer=tf.zeros_initializer)
+                Wdec_sig = tf.get_variable('Wdec_sig', shape=(self._hidden_dec.shape[-1], config.dimIN))
+                bdec_sig = tf.get_variable('bdec_sig', shape=config.dimIN, initializer=tf.zeros_initializer)
                 std = tf.nn.softplus(tf.tensordot(self._hidden_dec, Wdec_sig, [[-1], [0]]) + bdec_sig) + 1e-8
                 self._dec = [mu, std]
                 self._outputs = mu

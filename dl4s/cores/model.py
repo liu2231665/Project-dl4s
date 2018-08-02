@@ -337,7 +337,7 @@ class _model(object):
             if len(historyLoss) == 0 or validLoss_avg < np.min(np.asarray(historyLoss)[:, 1]):
                 worseCase = 0
                 bestEpoch = epoch
-                self.saveModel(saveto)
+                self.saveModel()
             else:
                 worseCase += 1
             historyLoss.append([trainLoss_avg, validLoss_avg])
@@ -349,9 +349,9 @@ class _model(object):
 
         # evaluate the best model w.r.t the test set and record the average loss if
         # we have saved the parameters of th best model.
-        if saveto is not None:
-            self.loadModel(saveto)
-
+        if self._savePath is not None:
+            self.loadModel(self._savePath)
+            #
             trainLoss = []
             self._sess.run(train_iterator.initializer, feed_dict={trainData_placeholder: dataset['train']})
             while True:
@@ -361,8 +361,7 @@ class _model(object):
                 except tf.errors.OutOfRangeError:
                     break
             trainLoss_avg = np.asarray(trainLoss).sum() / len(dataset['train'])
-
-
+            #
             validLoss = []
             self._sess.run(valid_iterator.initializer, feed_dict={validData_placeholder: dataset['valid']})
             while True:
@@ -392,3 +391,30 @@ class _model(object):
             np.savez(saveto, historyLoss=np.asarray(historyLoss),
                      testLoss=testLoss_avg, durationEpoch=durationEpoch)
         return
+
+    """#########################################################################
+    full_evaluate: define to fully evaluate the model under given test set.
+    input: model - the model.
+           testSet - the test set.
+           test_batchSize - batch size for test.
+    output: testLoss_avg - the average loss under the test set.
+    #########################################################################"""
+    def full_evaluate(self, testSet, test_batchSize=125, *args, **kwargs):
+        # define the tf.dataset to iterate the data.
+        with self._graph.as_default():
+            testData_placeholder = tf.placeholder(testSet.dtype, testSet.shape)
+            testData = tf.data.Dataset.from_tensor_slices(testData_placeholder)
+            testData = testData.batch(test_batchSize)
+            test_iterator = testData.make_initializable_iterator()
+            next_test_batch = test_iterator.get_next()
+        # compute the average loss on test set.
+        testLoss = []
+        self._sess.run(test_iterator.initializer, feed_dict={testData_placeholder: testSet})
+        while True:
+            try:
+                x = self._sess.run(next_test_batch)
+                testLoss.append(x.shape[0] * self.val_function(x))
+            except tf.errors.OutOfRangeError:
+                break
+        testLoss_avg = np.asarray(testLoss).sum() / len(testSet)
+        return testLoss_avg
