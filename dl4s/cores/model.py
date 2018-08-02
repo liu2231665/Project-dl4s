@@ -337,7 +337,8 @@ class _model(object):
             if len(historyLoss) == 0 or validLoss_avg < np.min(np.asarray(historyLoss)[:, 1]):
                 worseCase = 0
                 bestEpoch = epoch
-                self.saveModel()
+                if self._savePath is not None:
+                    self.saveModel()
             else:
                 worseCase += 1
             historyLoss.append([trainLoss_avg, validLoss_avg])
